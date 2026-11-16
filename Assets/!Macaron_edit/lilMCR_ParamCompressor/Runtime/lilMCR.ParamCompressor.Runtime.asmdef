@@ -1,0 +1,24 @@
+{
+    "name": "lilMCR.ParamCompressor.Runtime",
+    "rootNamespace": "liltoon_MCR",
+    "references": [
+        "VRC.SDKBase"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [
+        "LILMCR_VRCSDK_AVATARS"
+    ],
+    "versionDefines": [
+        {
+            "name": "com.vrchat.avatars",
+            "expression": "",
+            "define": "LILMCR_VRCSDK_AVATARS"
+        }
+    ],
+    "noEngineReferences": false
+}

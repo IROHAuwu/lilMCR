@@ -1,0 +1,19 @@
+{
+    "name": "lilMCR.PCSS.Editor",
+    "rootNamespace": "lilMCR.PCSS",
+    "references": [
+        "lilToon.Editor",
+        "liltoon_MCR.Editor"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

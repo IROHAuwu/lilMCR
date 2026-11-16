@@ -1,0 +1,67 @@
+lilMCR PCSS - Third-party notices / サードパーティライセンス / 第三方授權聲明
+===============================================================================
+
+lilMCR PCSS is an add-on for lilMCR (a lilToon custom shader).
+lilMCR PCSS は lilToon のカスタムシェーダー lilMCR 用のアドオンです。
+
+- The shader pass blocks follow the lilToon custom shader template.
+  シェーダーパスは lilToon のカスタムシェーダーのテンプレートに従っています。
+- The PCSS (percentage-closer soft shadows) implementation was written from
+  the following public references:
+  PCSS の実装は以下の公開資料を参考にしています。
+    * R. Fernando, "Percentage-Closer Soft Shadows", NVIDIA, 2005
+    * J. Jimenez, "Next Generation Post Processing in Call of Duty: Advanced
+      Warfare" (Interleaved Gradient Noise), SIGGRAPH 2014
+    * UnityPCSS (https://github.com/TheMasonX/UnityPCSS)
+
+-------------------------------------------------------------------------------
+lilToon (https://github.com/lilxyzw/lilToon)
+-------------------------------------------------------------------------------
+
+MIT License
+
+Copyright (c) 2020-2024 lilxyzw
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+-------------------------------------------------------------------------------
+UnityPCSS (https://github.com/TheMasonX/UnityPCSS)
+-------------------------------------------------------------------------------
+
+MIT License
+
+Copyright (c) 2017 Lucas Norr
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.

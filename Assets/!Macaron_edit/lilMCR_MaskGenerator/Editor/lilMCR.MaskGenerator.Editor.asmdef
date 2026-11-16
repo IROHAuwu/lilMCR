@@ -1,0 +1,7 @@
+{
+  "name": "lilMCR.MaskGenerator.Editor",
+  "rootNamespace": "LilMCR.MaskGenerator",
+  "includePlatforms": ["Editor"],
+  "references": [],
+  "autoReferenced": true
+}

@@ -1,0 +1,29 @@
+        Pass
+        {
+            Name "MCR_WORLD_CAPTURE"
+            Tags {"LightMode" = "Always"}
+            Cull [_Cull]
+            ZWrite On
+            ZTest LEqual
+            Blend Off
+            ColorMask RGBA
+            Stencil { Comp Always Pass Keep }
+            HLSLPROGRAM
+            #pragma target 3.5
+            #pragma vertex mcrCaptureVert
+            #pragma fragment mcrCaptureFrag
+            #pragma multi_compile_instancing
+            // lilToonMulti: rendering mode (LIL_RENDER) and the alpha mask come from keywords, which lilToon's own
+            // Multi passes declare and convert with lil_replace_keywords.hlsl. Unused by the other variants.
+            #pragma shader_feature_local UNITY_UI_ALPHACLIP
+            #pragma shader_feature_local UNITY_UI_CLIP_RECT
+            #pragma shader_feature_local _COLOROVERLAY_ON
+            #if defined(LIL_MULTI)
+                #include "Includes/lil_replace_keywords.hlsl"
+            #endif
+            #define LIL_PASS_FORWARD
+            #include "Includes/lil_pipeline_brp.hlsl"
+            #include "Includes/lil_common.hlsl"
+            #include "mcr_world_capture.hlsl"
+            ENDHLSL
+        }

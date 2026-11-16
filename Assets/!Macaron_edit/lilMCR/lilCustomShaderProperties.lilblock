@@ -1,0 +1,95 @@
+        //----------------------------------------------------------------------------------------------------------------------
+        // Macaron
+        [ToggleUI] _MCR_Active ("Macaron", Float) = 1
+        _MCR_Amount ("Amount", Range(0, 1)) = 1
+        _MCR_CasterMask ("Caster Mask", 2D) = "white" {}
+        _MCR_CasterMaskAmount ("Caster Mask Amount", Range(0, 1)) = 1
+        [HideInInspector] _MCR_WorldCapture ("World Capture", Vector) = (0,0,0,0)
+        _MCR_GlobalMask ("Global Mask", 2D) = "white" {}
+        _MCR_GlobalMaskAmount ("Global Mask Amount", Range(0, 1)) = 1
+        _MCR_NormalSmooth ("Normal Smoothing", Range(0, 1)) = 1
+        _MCR_FloorBrightness ("Floor Brightness", Range(0, 1)) = 0
+        _MCR_FadeDistance ("Fade Distance (start, end) (m)", Vector) = (0,5,0,0)
+        [ToggleUI] _MCR_AlphaAware ("Alpha Aware", Float) = 1
+        // Local Only: every lilMCR feature only on the wearer's own client (mcr_local_only.hlsl); others see plain lilToon.
+        [ToggleUI] _MCR_LocalOnly ("Local Only", Float) = 0
+
+        // Occlusion
+        [ToggleUI] _MCR_OccEnable ("Occlusion", Float) = 1
+        _MCR_OccMethod ("Occlusion Method (0 SSAO / 1 Ray March / 2 GTAO)", Float) = 1
+        _MCR_OccQuality ("Occlusion Quality (0 Light / 1 Standard / 4 Standard no 2x2 / 2 Fine / 3 Best)", Float) = 1
+        [ToggleUI] _MCR_OccScreenLOD ("Adaptive Screen Quality", Float) = 1
+        _MCR_OccAmount ("Occlusion Amount", Range(0, 4)) = 1
+        _MCR_OccContrast ("Occlusion Contrast", Range(-1, 1)) = 0
+        _MCR_OccNoise ("Occlusion Noise", Range(0, 1)) = 0.5
+        _MCR_OccTintNear ("Occlusion Tint (near)", Color) = (0.37,0.37,0.37,1)
+        _MCR_OccTintFar ("Occlusion Tint (far)", Color) = (0,0,0,1)
+        _MCR_OccAlbedoTint ("Occlusion Albedo Tint", Range(0, 1)) = 1
+        _MCR_OccReflection ("Occlusion on Reflections", Range(0, 1)) = 1
+        _MCR_OccBlend ("Occlusion Blend (0 Multiply / 1 Subtract)", Float) = 0
+        [NoScaleOffset] _MCR_OccMask ("Occlusion Mask", 2D) = "white" {}
+        _MCR_OccMaskAmount ("Occlusion Mask Amount", Range(0, 1)) = 1
+        [ToggleUI] _MCR_OccMaskFlip ("Flip Occlusion Mask", Float) = 0
+        _MCR_SSAOReach ("SSAO Reach (reference px)", Range(1, 40)) = 9.5
+        _MCR_SSAODepthReach ("SSAO Front Distance (m)", Range(0.01, 0.3)) = 0.04
+        _MCR_SSAOBias ("SSAO Self-Occlusion Tolerance (m)", Range(0, 0.005)) = 0.0008
+        _MCR_SSAOSpread ("SSAO Spread", Range(0, 1)) = 0.35
+        _MCR_SSAOEdgeReject ("SSAO Edge Rejection", Range(0, 1)) = 0.3
+        _MCR_OccReach ("Occlusion Reach (m)", Range(0.002, 0.15)) = 0.02
+        _MCR_OccFocus ("Occlusion Focus", Range(0, 1)) = 0.5
+        _MCR_OccThickness ("Occlusion Thickness (m)", Range(0.002, 0.08)) = 0.015
+        _MCR_OccSoftness ("Occlusion Softness", Range(0, 1)) = 1
+        _MCR_OccAngle ("Occlusion Angle (deg)", Range(10, 90)) = 60
+        _MCR_OccScaleMode ("Occlusion Scale (0 Meters / 1 Screen)", Float) = 0
+        _MCR_GTAOReach ("GTAO Reach (m)", Range(0.0005, 0.05)) = 0.01
+        _MCR_GTAOWideReach ("GTAO Wide Reach (m)", Range(0.005, 0.2)) = 0.06
+        _MCR_GTAODepthReach ("GTAO Front Distance (m)", Range(0.002, 0.3)) = 0.05
+        _MCR_GTAOWideAmount ("GTAO Wide Amount", Range(0, 1)) = 0
+        _MCR_GTAOSoftness ("GTAO Edge Gradient", Range(0, 1)) = 0.6
+
+
+        // Contact Shadow (fixed light direction)
+        [ToggleUI] _MCR_ShadowEnable ("Contact Shadow", Float) = 1
+        _MCR_ShadowIntensity ("Shadow Intensity", Range(0, 1)) = 0.5
+        _MCR_ShadowColor ("Shadow Color", Color) = (0.21960777,0.21960777,0.21960777,1)
+        _MCR_ShadowSpace ("Light Space (0 Avatar / 1 Camera / 2 World)", Float) = 0
+        _MCR_ShadowDirection ("Light Direction", Vector) = (-0.35820895,0.23880596,0.9025841,0)
+        [HideInInspector] _MCR_AvatarBasisX ("Avatar Axis X (object space)", Vector) = (-1,0,0,0)
+        [HideInInspector] _MCR_AvatarBasisY ("Avatar Axis Y (object space)", Vector) = (0,1,0,0)
+        [HideInInspector] _MCR_AvatarBasisZ ("Avatar Axis Z (object space)", Vector) = (0,0,1,0)
+        _MCR_ShadowLength ("Shadow Length (m)", Range(0.005, 0.3)) = 0.005
+        _MCR_ShadowQuality ("Shadow Quality (-1 Lowest - 3 Ultra)", Float) = 1
+        [ToggleUI] _MCR_ShadowScreenLOD ("Shadow Adaptive Screen Quality", Float) = 1
+        _MCR_ShadowSoftness ("Shadow Softness (deg)", Range(0, 30)) = 0
+        _MCR_ShadowThickness ("Shadow Thickness (m)", Range(0.0005, 0.05)) = 0.0005
+        _MCR_ShadowOffset ("Shadow Offset (depth, normal) (m)", Vector) = (0,0.001,0,0)
+        _MCR_ShadowReject ("Shadow Reject Distance (m)", Range(0.01, 1)) = 0.2
+        _MCR_ShadowNormalReject ("Shadow Normal Reject", Range(0, 1)) = 0
+        _MCR_ShadowBackShade ("Back Side Shade", Range(0, 1)) = 1
+        _MCR_ShadowJitter ("Shadow Jitter", Range(0, 1)) = 0
+        [NoScaleOffset] _MCR_ShadowMask ("Shadow Mask", 2D) = "white" {}
+        _MCR_ShadowMaskAmount ("Shadow Mask Amount", Range(0, 1)) = 1
+
+        // Uzumore (camera inside the mesh): the surface the camera went through is pushed back in front of it.
+        [ToggleUI] _MCR_UzuEnable ("Uzumore", Float) = 1
+        _MCR_UzuAmount ("Uzumore Reach (m)", Range(0, 0.5)) = 0.15
+        _MCR_UzuBias ("Uzumore Layer Offset (m)", Range(0, 0.01)) = 0.001
+        _MCR_UzuBrightness ("Uzumore Brightness", Range(0, 1)) = 0.2
+        _MCR_UzuBackReject ("Uzumore Back Side Reject", Range(0, 1)) = 0.5
+        [ToggleUI] _MCR_UzuSelf ("Uzumore In Own View", Float) = 0
+        [NoScaleOffset] _MCR_UzuMask ("Uzumore Mask", 2D) = "white" {}
+        _MCR_UzuMaskAmount ("Uzumore Mask Amount", Range(0, 1)) = 1
+        // 1 only on the wearer's own client (IsLocal layer of the Macaron Light Adjuster, MacaronUzumore.cs).
+        // Used by Uzumore ("In Own View") and Local Only. Keep the default 0.
+        [HideInInspector] _MCR_UzuIsLocal ("Is Local (animated)", Float) = 0
+        // Light Adjuster: driven by the avatar menu (animation). Keep these defaults neutral.
+        [HideInInspector] _MCR_AdjActive ("Adjuster lilMCR On (lightweight switch)", Float) = 1
+        [HideInInspector] _MCR_AdjLocalOnly ("Adjuster Local Only", Float) = 0
+        [HideInInspector] _MCR_AdjBrightness ("Adjuster Brightness", Float) = 1
+        [HideInInspector] _MCR_AdjFixedBrightness ("Adjuster Fixed Brightness", Float) = 0
+        [HideInInspector] _MCR_AdjLightColorInfluence ("Adjuster Light Color Influence", Float) = 1
+        [HideInInspector] _MCR_AdjTemperature ("Adjuster Color Temperature (-1 cool / +1 warm)", Float) = 0
+        [HideInInspector] _MCR_AdjSaturation ("Adjuster Saturation", Float) = 1
+        [HideInInspector] _MCR_AdjLightStrength ("Adjuster Light Direction Strength", Float) = 0
+        [HideInInspector] _MCR_AdjLightYaw ("Adjuster Light Yaw (deg)", Float) = 0
+        [HideInInspector] _MCR_AdjLightPitch ("Adjuster Light Pitch (deg)", Float) = 45

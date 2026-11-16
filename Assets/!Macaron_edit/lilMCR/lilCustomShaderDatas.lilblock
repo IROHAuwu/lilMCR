@@ -1,0 +1,5 @@
+ShaderName "Macaron"
+EditorName "lilToon.MacaronInspector"
+InsertPassPost "!FakeShadow" "mcr_world_capture_pass.lilblock"
+InsertUsePassPost "!Overlay" "mcr_world_capture_usepass.lilblock"
+Replace "#pragma target 3.5" "#if defined(SHADER_API_D3D11)\n            #pragma target 4.5\n            #else\n            #pragma target 3.5\n            #endif"
