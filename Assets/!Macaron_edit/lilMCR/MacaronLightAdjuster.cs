@@ -708,6 +708,101 @@ namespace liltoon_MCR
             disable.AddCondition(AnimatorConditionMode.IfNot, 0, parameter);
             sm.defaultState = defaultOn ? on : off;
         }
+        // The Depth Light (MacaronDepthSource) makes Unity render the camera depth texture: every opaque object of the scene
+        // is drawn once more for it, on every client that sees this avatar. This layer disables the Light component
+        // while no lilMCR feature of this avatar can use the depth texture on that client:
+        //   - the menu's main switch (Macaron/Active) is off: occlusion, contact shadow and World Shadow are all off;
+        //   - Local Only on another player's client (IsLocal false): nothing of lilMCR is drawn there. Local Only is
+        //     either the menu item (Macaron/LocalOnly) or the material switch on every Macaron material of the avatar
+        //     (checked when this is generated: run "Add / Update" again after changing the material switch).
+        // No layer when none of these can happen. A client whose animator does not run keeps the light on, as before.
+        private static void AddDepthLightLayer(AnimatorController controller, Transform avatarRoot, List<Renderer> renderers, Control[] controls)
+        {
+            Transform holder = avatarRoot.Find(MacaronCore.DepthSourceName);
+            Light light = holder != null ? holder.GetComponentInChildren<Light>(true) : null;
+            if(light == null) return;
+
+            const string activeParam = "Macaron/Active";
+            const string localOnlyParam = "Macaron/LocalOnly";
+            const string isLocalParam = "IsLocal";
+            bool hasActive = false;
+            bool hasLocalOnly = false;
+            foreach(Control c in controls)
+            {
+                if(c.Parameter == activeParam) hasActive = true;
+                if(c.Parameter == localOnlyParam) hasLocalOnly = true;
+            }
+            bool anyMaterial = false;
+            bool allLocalOnly = true;
+            foreach(Renderer r in renderers)
+            {
+                foreach(Material m in r.sharedMaterials)
+                {
+                    if(!MacaronCore.IsMacaronMaterial(m)) continue;
+                    anyMaterial = true;
+                    if(!m.HasProperty("_MCR_LocalOnly") || m.GetFloat("_MCR_LocalOnly") < 0.5f) allLocalOnly = false;
+                }
+            }
+            bool staticLocalOnly = anyMaterial && allLocalOnly;
+            if(!hasActive && !hasLocalOnly && !staticLocalOnly) return;
+
+            if(hasLocalOnly || staticLocalOnly)
+            {
+                bool hasParam = false;
+                foreach(AnimatorControllerParameter p in controller.parameters) if(p.name == isLocalParam) { hasParam = true; break; }
+                if(!hasParam) controller.AddParameter(isLocalParam, AnimatorControllerParameterType.Bool);
+            }
+
+            controller.AddLayer("Macaron Depth Light");
+            AnimatorControllerLayer[] ls = controller.layers;
+            int index = ls.Length - 1;
+            ls[index].defaultWeight = 1f;
+            AnimatorStateMachine sm = ls[index].stateMachine;
+
+            string path = AnimationUtility.CalculateTransformPath(light.transform, avatarRoot);
+            AnimatorState[] states = new AnimatorState[2];
+            for(int i = 0; i < 2; i++)
+            {
+                AnimationClip clip = new AnimationClip { name = i == 0 ? "Depth Light Off" : "Depth Light On" };
+                AnimationUtility.SetEditorCurve(clip, EditorCurveBinding.FloatCurve(path, typeof(Light), "m_Enabled"),
+                    AnimationCurve.Constant(0f, 1f / 60f, i));
+                AssetDatabase.AddObjectToAsset(clip, controller);
+                states[i] = sm.AddState(i == 0 ? "Off" : "On");
+                states[i].motion = clip;
+                states[i].writeDefaultValues = false;   // MA "Match Avatar Write Defaults" adjusts this at build
+            }
+            AnimatorState off = states[0];
+            AnimatorState on = states[1];
+            sm.defaultState = on;
+
+            // On -> Off: any one reason.
+            if(hasActive)
+            {
+                AnimatorStateTransition t = on.AddTransition(off);
+                t.hasExitTime = false; t.duration = 0f;
+                t.AddCondition(AnimatorConditionMode.IfNot, 0f, activeParam);
+            }
+            if(staticLocalOnly || hasLocalOnly)
+            {
+                AnimatorStateTransition t = on.AddTransition(off);
+                t.hasExitTime = false; t.duration = 0f;
+                if(!staticLocalOnly) t.AddCondition(AnimatorConditionMode.If, 0f, localOnlyParam);
+                t.AddCondition(AnimatorConditionMode.IfNot, 0f, isLocalParam);
+            }
+
+            // Off -> On: the main switch is on, and this client draws lilMCR (not Local Only, or the wearer's own client).
+            int alternatives = (!staticLocalOnly && hasLocalOnly) ? 2 : 1;
+            for(int a = 0; a < alternatives; a++)
+            {
+                AnimatorStateTransition t = off.AddTransition(on);
+                t.hasExitTime = false; t.duration = 0f;
+                if(hasActive) t.AddCondition(AnimatorConditionMode.If, 0f, activeParam);
+                if(staticLocalOnly) t.AddCondition(AnimatorConditionMode.If, 0f, isLocalParam);
+                else if(hasLocalOnly) t.AddCondition(a == 0 ? AnimatorConditionMode.IfNot : AnimatorConditionMode.If, 0f, a == 0 ? localOnlyParam : isLocalParam);
+            }
+            controller.layers = ls;
+        }
+
         private static AnimatorController BuildController(Transform avatarRoot, List<Renderer> renderers, Control[] controls, string path, AnimatorController reuse, bool uzumore)
         {
             // Generated contents are rebuilt every time; an existing asset is cleared in place so its GUID stays.
@@ -782,6 +877,9 @@ namespace liltoon_MCR
                 if(c.Toggle) ConfigureBoolStates(controller, sm, state, clip, c.Parameter, c.Default > 0.5f);
                 controller.layers = ls;
             }
+
+            // Depth Light: off whenever nothing on this client needs the camera depth texture.
+            AddDepthLightLayer(controller, avatarRoot, renderers, controls);
 
             // Uzumore / Local Only: _MCR_UzuIsLocal = 1 on the wearer's own client (MacaronUzumore.cs).
             if(uzumore) MacaronUzumore.AddIsLocalLayer(controller, avatarRoot, renderers);

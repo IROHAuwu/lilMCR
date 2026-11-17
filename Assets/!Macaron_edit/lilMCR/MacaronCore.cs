@@ -225,7 +225,7 @@ namespace liltoon_MCR
             occ.Props.Add(HideOptions(Popup("_MCR_OccQuality", "品質", new[] { "輕量", "標準", "標準（無 2×2）", "精細", "最高" }, new[] { 0f, 1f, 4f, 2f, 3f },
                 "Ray March（DX11）：標準 = 相鄰 2×2 像素各打約一半光線再合併，輕量 = 各約 1/4；輪廓、深度落差、折角處自動完整採樣。標準（無 2×2）= 標準的採樣數但每個像素自己完整計算，不會因合併而模糊。精細、最高不分攤。"),
                 (g, v) => Mathf.Approximately(v, OccQualityNo2x2) && !IsRay(g), v => OccQualityStandard));
-            occ.Props.Add(Adv(P("_MCR_OccScreenLOD", "依畫面大小調整品質", MacaronPropKind.Toggle, "減少看不出差別的採樣：Ray March 範圍在畫面上很小時減少採樣、近看時限制範圍在畫面上的大小；像素光（ForwardAdd）的遮蔽改用最低品質。關閉可保留原本的品質與範圍。")));
+            occ.Props.Add(Adv(P("_MCR_OccScreenLOD", "依畫面大小調整品質", MacaronPropKind.Toggle, "減少看不出差別的採樣：Ray March 範圍在畫面上很小時減少採樣、近看時限制範圍在畫面上的大小。關閉可保留原本的品質與範圍。")));
             occ.Props.Add(P("_MCR_OccAmount", "濃度", MacaronPropKind.Slider));
             occ.Props.Add(P("_MCR_OccContrast", "對比", MacaronPropKind.Slider, "-1 = 淡的遮蔽也明顯、0 = 不變、1 = 淡的更淡、濃的更濃。"));
 
@@ -288,7 +288,7 @@ namespace liltoon_MCR
             shadow.Props.Add(P("_MCR_ShadowSoftness", "柔和度 (度)", MacaronPropKind.Slider, "0 = 銳利，數值越大邊緣越柔和。"));
             shadow.Props.Add(Popup("_MCR_ShadowQuality", "品質", new[] { "最低", "低", "中", "高", "極高" }, new[] { -1f, 0f, 1f, 2f, 3f },
                 "最低：1 條光線、5 步，影子長時會出現分層，適合短影子或遠景。"));
-            shadow.Props.Add(Adv(P("_MCR_ShadowScreenLOD", "依畫面大小調整品質", MacaronPropKind.Toggle, "近看時限制影子在畫面上的長度以降低負擔；像素光（ForwardAdd）的接觸陰影改用最低品質。關閉可保留原本的長度與品質。")));
+            shadow.Props.Add(Adv(P("_MCR_ShadowScreenLOD", "依畫面大小調整品質", MacaronPropKind.Toggle, "近看時限制影子在畫面上的長度以降低負擔。關閉可保留原本的長度。")));
             shadow.Props.Add(Adv(P("_MCR_ShadowReject", "忽略前方物體距離 (m)", MacaronPropKind.Slider,
                 "比這個距離更靠近鏡頭的物體（例如其他玩家）不會投下陰影。")));
             shadow.Props.Add(Adv(P("_MCR_ShadowThickness", "遮蔽物厚度 (m)", MacaronPropKind.Slider)));

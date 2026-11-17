@@ -76,7 +76,7 @@ bool Macaron_IsCameraDepthView()
 
 // Black pixel light (the lilMCR PCSS light, or any light whose color is exactly 0) in lilToon's ForwardAdd pass
 //
-// The pass would add exactly nothing, but still rasterizes and shades every pixel (Macaron's occlusion included).
+// The pass would add exactly nothing, but still rasterizes and shades every pixel.
 // The mesh is collapsed to one point in the vertex shader, so no pixel is drawn. Draw call, vertex work and the light's
 // shadow map stay. Only done where skipping the draw provably leaves the frame unchanged:
 //   - the light color is exactly 0 (lilToon's ForwardAdd output is then black),
@@ -256,17 +256,25 @@ float2 MCR_DepthTexel(float2 uv, MCRDepthInfo di)
 // The depth texture stores the surface depth at its texel centers. A point rebuilt from that depth must use the texel
 // center too: rebuilt at an off-center position, a surface seen edge-on (the side of a face) gets a depth error of up to
 // half a texel x its depth slope, which reads as small bumps above the surface in a pixel / polygon grid pattern.
-float2 MCR_DepthTexelCenter(float2 eyePx, MCRDepthInfo di)
+#if !defined(LIL_HDRP)
+// Eye-local pixel of the center of a known depth texel (the texel comes from MCR_DepthTexel).
+float2 MCR_DepthTexelToEyeCenter(float2 texel, MCRDepthInfo di)
 {
-#if defined(LIL_HDRP)
-    return floor(eyePx) + 0.5;
-#else
-    float2 c = (MCR_DepthTexel(eyePx / di.screenSize, di) + 0.5) / di.depthSize;
+    float2 c = (texel + 0.5) / di.depthSize;
     if(MCR_DepthFlipY()) c.y = 1.0 - c.y;
 #if defined(UNITY_SINGLE_PASS_STEREO)
     if(di.sideBySide) c = (c - di.eyeST.zw) / max(di.eyeST.xy, float2(MCR_TINY, MCR_TINY));
 #endif
     return c * di.screenSize;
+}
+#endif
+
+float2 MCR_DepthTexelCenter(float2 eyePx, MCRDepthInfo di)
+{
+#if defined(LIL_HDRP)
+    return floor(eyePx) + 0.5;
+#else
+    return MCR_DepthTexelToEyeCenter(MCR_DepthTexel(eyePx / di.screenSize, di), di);
 #endif
 }
 
@@ -313,6 +321,30 @@ float MCR_ReadDepthCached(float2 eyePx, MCRDepthInfo di, inout MCRDepthCache cac
     if(abs(raw - MCR_EmptyRawDepth()) < 0.000001) return 1e6;
     return LIL_TO_LINEARDEPTH(raw, eyePx);
 }
+
+#if !defined(LIL_HDRP)
+// MCR_ReadDepthCached(eyePx) with the texel already known, so its address is not computed again. texel must be
+// MCR_DepthTexel(eyePx / screenSize) of this eyePx, or eyePx the snapped center MCR_DepthTexelToEyeCenter(texel) (a
+// texel center maps back to the same texel, half a texel from every edge). Either way the result is the same as
+// MCR_ReadDepthCached(eyePx). The eye range guard is kept as is: with a double-wide depth texture whose eye boundary does
+// not fall on a texel edge, the center of an edge texel can lie outside the eye, where MCR_ReadDepthCached returns
+// "nothing drawn". The linearization uses eyePx. Keep the cache / linearization in sync with MCR_ReadDepthCached.
+float MCR_ReadDepthTexelCached(float2 texel, float2 eyePx, MCRDepthInfo di, inout MCRDepthCache cache)
+{
+    float2 uv = eyePx / di.screenSize;
+    if(any(uv < 0.0) || any(uv >= 1.0)) return 1e6;
+    [branch]
+    if(!cache.valid || any(texel != cache.texel))
+    {
+        cache.raw = LIL_SAMPLE_SCREEN_CS(_CameraDepthTexture,texel).r;
+        cache.texel = texel;
+        cache.valid = true;
+    }
+    float raw = cache.raw;
+    if(abs(raw - MCR_EmptyRawDepth()) < 0.000001) return 1e6;
+    return LIL_TO_LINEARDEPTH(raw, eyePx);
+}
+#endif
 
 // Linear view depth of the depth texture at an eye-local pixel (1e6 where nothing was drawn).
 // Uses lilToon's linearization (also correct for the oblique projection of VRChat mirrors).
@@ -484,10 +516,40 @@ int MCR_OccQualitySetting()
 }
 
 // Sample budget level 0..3: Standard without the quad share uses the Standard budget.
+// Mirrors: the avatar is drawn once more per eye there, so the mirror image uses the Light budget and the Low contact
+// shadow. LIL_IS_MIRROR is uniform per draw.
+bool MCR_MirrorLowest()
+{
+    return LIL_IS_MIRROR;
+}
+
+// VR: stereo rendering shades two high-resolution eyes, so one quality level is dropped there (occlusion down to Light,
+// contact shadow down to Low). Compile time: the desktop variants are unchanged, and so are non-stereo cameras in VR
+// (handheld / stream camera).
+#if defined(USING_STEREO_MATRICES)
+    #define MCR_VR_LEVELS 1
+#else
+    #define MCR_VR_LEVELS 0
+#endif
+
+// VR only: very close to the camera the whole effect fades out, gone at START and full from END (m). A surface that
+// close fills most of both eyes, where every pixel would pay the full cost. Desktop and non-stereo cameras: no fade.
+#define MCR_NEAR_FADE_START 0.12
+#define MCR_NEAR_FADE_END 0.20
+float MCR_NearFade(float viewDepth)
+{
+#if defined(USING_STEREO_MATRICES)
+    return smoothstep(MCR_NEAR_FADE_START, MCR_NEAR_FADE_END, viewDepth);
+#else
+    return 1.0;
+#endif
+}
+
 int MCR_OccQualityLevel()
 {
+    if(MCR_MirrorLowest()) return 0;
     int q = MCR_OccQualitySetting();
-    return q == 4 ? 1 : q;
+    return max((q == 4 ? 1 : q) - MCR_VR_LEVELS, 0);
 }
 
 // Adaptive Screen Quality of the occlusion (material toggle, uniform per draw).
@@ -495,16 +557,6 @@ bool MCR_OccAdaptive()
 {
     return _MCR_OccScreenLOD > 0.5;
 }
-
-// Pixel light pass (BRP ForwardAdd): BEFORE_FOG runs again for every pixel light, so the whole occlusion / contact
-// shadow is computed once more per light. Only the light added by that light is darkened there, so the Adaptive
-// toggles run it at the lowest quality.
-#if defined(LIL_PASS_FORWARDADD)
-    #define MCR_IS_ADD_PASS 1
-#else
-    #define MCR_IS_ADD_PASS 0
-#endif
-#define MCR_ADD_PASS_DROP 3
 
 // Soft cap of an on-screen size: px / (1 + (px / cap)^4)^(1/4), returned as a scale factor.
 // ~1 below half the cap, 0.84 at the cap, the result never exceeds the cap.
@@ -625,7 +677,6 @@ float MCR_CalcSSAO(MCRSurface s, MCRDepthInfo di)
     float radiusPx = min(radiusFullPx, MCR_MAX_RADIUS_PX);
     float pixelWeight = MCR_SubPixelFade(radiusPx);
     int q = MCR_OccQualityLevel();
-    if(MCR_IS_ADD_PASS && MCR_OccAdaptive()) q = 0;
     int samples = q == 0 ? 6 : (q == 1 ? 12 : (q == 2 ? 18 : 24));
     // Sub-pixel radius: no samples (the loop ends at once). One exit point only: an early return here made the d3d11
     // compiler warn about a potentially uninitialized return value.
@@ -712,7 +763,7 @@ int MCR_DistanceLOD(float viewDepth)
 {
     return (viewDepth >= 2.0 ? 1 : 0) + (viewDepth >= 4.0 ? 1 : 0) + (viewDepth >= 8.0 ? 1 : 0);
 }
-// qualityDrop: extra levels removed by Adaptive Screen Quality (pixel light pass, near cap without the quad share).
+// qualityDrop: extra levels removed by Adaptive Screen Quality (near cap without the quad share).
 void MCR_OccBudget(float viewDepth, float reachPx, int qualityDrop, out int rays, out int steps)
 {
     int q = max(0, MCR_OccQualityLevel() - MCR_DistanceLOD(viewDepth) - qualityDrop);
@@ -727,6 +778,40 @@ void MCR_OccBudget(float viewDepth, float reachPx, int qualityDrop, out int rays
         steps = min(steps,capSteps);
     }
 }
+
+#if MCR_VR_LEVELS
+// VR step compensation (stereo variants only)
+//
+// The VR level drop marches fewer steps along each direction, and fewer steps find fewer occluders (the thin ones
+// fall between two steps): the occlusion gets fainter than on desktop. It is multiplied by
+//     (steps without the VR drop / steps actually used) ^ MCR_VR_STEP_COMP
+// which costs no depth read. Where the screen size of Reach limits the steps anyway, both counts are equal and
+// nothing changes. Higher = darker in VR. Fewer directions only add noise and are not compensated.
+#define MCR_VR_STEP_COMP 1.0
+// Quality level 0..3 as on desktop: without the VR drop. qualityDrop as in MCR_OccBudget.
+int MCR_OccLevelNoVR(float viewDepth, int qualityDrop)
+{
+    int q = MCR_OccQualitySetting();
+    q = q == 4 ? 1 : q;
+    return max(0, q - MCR_DistanceLOD(viewDepth) - qualityDrop);
+}
+float MCR_VRStepComp(int refSteps, int steps)
+{
+    return pow(clamp((float)max(refSteps, 1) / (float)max(steps, 1), 1.0, 4.0), MCR_VR_STEP_COMP);
+}
+// Ray March: for the steps MCR_OccBudget returned.
+float MCR_OccVRComp(float viewDepth, float reachPx, int qualityDrop, int steps)
+{
+    int q = MCR_OccLevelNoVR(viewDepth, qualityDrop);
+    int refSteps = q == 0 ? 6 : (q == 1 ? 8 : (q == 2 ? 12 : 18));
+    if(MCR_OccAdaptive())
+    {
+        int capSteps = reachPx < 3.0 ? 4 : (reachPx < 6.0 ? 6 : (reachPx < 12.0 ? 8 : (reachPx < 24.0 ? 12 : 18)));
+        refSteps = min(refSteps, capSteps);
+    }
+    return MCR_VRStepComp(refSteps, steps);
+}
+#endif
 
 // Reach in meters. Screen mode: the value is set for a 60 deg view and follows the zoom (same size on screen).
 float MCR_ScaledReach(float meters)
@@ -799,7 +884,13 @@ float MCR_RTHitAt(float4 clip, MCRSurface s, MCRDepthInfo di, MCRHitParams hp, i
     onScreen = clip.w > 0.01 && MCR_InsideEye(px, di);
     if(!onScreen) return 0.0;
 
+#if defined(LIL_HDRP)
     float sceneDepth = MCR_ReadDepthCached(px, di, cache);
+#else
+    // The texel is computed once: this read (at px, as MCR_ReadDepthCached) and the center rebuild below share it.
+    float2 texel = MCR_DepthTexel(px / di.screenSize, di);
+    float sceneDepth = MCR_ReadDepthTexelCached(texel, px, di, cache);
+#endif
     float gap = clip.w - sceneDepth - hp.bias;               // > 0: the point is hidden
     [branch]
     if(gap <= 0.0 || gap >= hp.farLimit * 2.0) return 0.0;   // visible, or far in front: no occluder
@@ -809,7 +900,11 @@ float MCR_RTHitAt(float4 clip, MCRSurface s, MCRDepthInfo di, MCRHitParams hp, i
     [branch]
     if(s.smoothing <= 0.0) return hit;
     // Rebuilt at the depth texel center, where the depth was stored (see MCR_DepthTexelCenter).
+#if defined(LIL_HDRP)
     return hit * MCR_AboveSurface(MCR_ViewRay(MCR_DepthTexelCenter(px, di), di) * sceneDepth, s, hp.tolerance);
+#else
+    return hit * MCR_AboveSurface(MCR_ViewRay(MCR_DepthTexelToEyeCenter(texel, di), di) * sceneDepth, s, hp.tolerance);
+#endif
 }
 
 // Which rays this pixel marches.
@@ -1051,10 +1146,10 @@ float MCR_GTAOEdgeFade(float f, float soft)
     return edge * curve;
 }
 
-// Slices and steps per side for quality 0..3, lowered by the distance LOD / pixel light pass like Ray March.
-void MCR_GTAOBudget(float viewDepth, float reachPx, int qualityDrop, out int slices, out int steps)
+// Slices and steps per side for quality 0..3, lowered by the distance LOD like Ray March.
+void MCR_GTAOBudget(float viewDepth, float reachPx, out int slices, out int steps)
 {
-    int q = max(0, MCR_OccQualityLevel() - MCR_DistanceLOD(viewDepth) - qualityDrop);
+    int q = max(0, MCR_OccQualityLevel() - MCR_DistanceLOD(viewDepth));
     slices = q == 0 ? 2 : (q == 1 ? 3 : (q == 2 ? 4 : 6));
     steps = q == 0 ? 4 : (q == 1 ? 6 : (q == 2 ? 8 : 12));
     if(MCR_OccAdaptive())
@@ -1063,6 +1158,20 @@ void MCR_GTAOBudget(float viewDepth, float reachPx, int qualityDrop, out int sli
         steps = min(steps, (int)clamp(ceil(reachPx * 0.75), 2.0, (float)MCR_GTAO_MAX_STEPS));
     }
 }
+
+#if MCR_VR_LEVELS
+// VR step compensation of GTAO for the steps MCR_GTAOBudget returned (see MCR_VR_STEP_COMP).
+float MCR_GTAOVRComp(float viewDepth, float reachPx, int steps)
+{
+    int q = MCR_OccLevelNoVR(viewDepth, 0);
+    int refSteps = q == 0 ? 4 : (q == 1 ? 6 : (q == 2 ? 8 : 12));
+    if(MCR_OccAdaptive())
+    {
+        refSteps = min(refSteps, (int)clamp(ceil(reachPx * 0.75), 2.0, (float)MCR_GTAO_MAX_STEPS));
+    }
+    return MCR_VRStepComp(refSteps, steps);
+}
+#endif
 
 // cos of the highest occluder seen from this pixel along one screen direction.
 //   lowCos : cos of the tangent plane in this slice (no occluder)
@@ -1102,9 +1211,15 @@ float MCR_GTAOHorizon(MCRSurface s, MCRDepthInfo di, float3 origin, float2 stepP
         if(!MCR_InsideEye(px, di)) break;
         // Rebuild the point where its depth was actually stored (see MCR_DepthTexelCenter). The step is at least one
         // pixel long, so the snapped point never falls back onto this pixel.
+#if defined(LIL_HDRP)
         px = MCR_DepthTexelCenter(px, di);
-
         float sceneDepth = MCR_ReadDepthCached(px, di, cache);
+#else
+        // The texel is computed once and read directly (MCR_ReadDepthTexelCached), not recomputed from the center.
+        float2 texel = MCR_DepthTexel(px / di.screenSize, di);
+        px = MCR_DepthTexelToEyeCenter(texel, di);
+        float sceneDepth = MCR_ReadDepthTexelCached(texel, px, di, cache);
+#endif
         float3 v = MCR_ViewRay(px, di) * sceneDepth - origin;
         float dist = length(v);
         // Polygon tolerance (same idea as MCR_AboveSurface of Ray March / Contact Shadow): the depth texture holds flat
@@ -1139,10 +1254,12 @@ float MCR_GTAOHorizon(MCRSurface s, MCRDepthInfo di, float3 origin, float2 stepP
 float2 MCR_CalcGTAO(MCRSurface s, MCRDepthInfo di, float reach, float weight)
 {
     float reachPx = reach * di.focalPx / max(s.viewDepth, 0.05);
-    int qualityDrop = MCR_IS_ADD_PASS && MCR_OccAdaptive() ? MCR_ADD_PASS_DROP : 0;
     int slices;
     int steps;
-    MCR_GTAOBudget(s.viewDepth, reachPx, qualityDrop, slices, steps);
+    MCR_GTAOBudget(s.viewDepth, reachPx, slices, steps);
+    #if MCR_VR_LEVELS
+        weight *= MCR_GTAOVRComp(s.viewDepth, reachPx, steps);
+    #endif
 
     // Same scale as reach (Screen scale mode, near-camera cap) so the wide band keeps its ratio to the main band.
     float reachScale = reach / max(_MCR_GTAOReach, MCR_TINY);
@@ -1311,7 +1428,13 @@ float MCR_ShadowBlock(MCRShadowRay r, MCRSurface s, MCRDepthInfo di, float t, in
     if(!MCR_InsideEye(samplePx, di)) { valid = false; return 0.0; }
 
     // Moved back by this pixel's own depth texture offset, so the receiver's own surface reads where it really is.
+#if defined(LIL_HDRP)
     float sceneDepth = MCR_ReadDepthCached(samplePx, di, cache) + r.depthBias;
+#else
+    // The texel is computed once: this read (at samplePx, as MCR_ReadDepthCached) and the center rebuild below share it.
+    float2 sampleTexel = MCR_DepthTexel(samplePx / di.screenSize, di);
+    float sceneDepth = MCR_ReadDepthTexelCached(sampleTexel, samplePx, di, cache) + r.depthBias;
+#endif
     // > 0: the depth texture has something in front of the ray point.
     float diff = clip.w - sceneDepth - _MCR_ShadowOffset.x;
     [branch]
@@ -1322,7 +1445,11 @@ float MCR_ShadowBlock(MCRShadowRay r, MCRSurface s, MCRDepthInfo di, float t, in
 
     // Self-shadow tests in 3D, on the point the depth texture holds (rebuilt at the depth texel center, where the
     // depth was stored, see MCR_DepthTexelCenter).
+#if defined(LIL_HDRP)
     float3 occluderVS = MCR_ViewRay(MCR_DepthTexelCenter(samplePx, di), di) * sceneDepth;
+#else
+    float3 occluderVS = MCR_ViewRay(MCR_DepthTexelToEyeCenter(sampleTexel, di), di) * sceneDepth;
+#endif
     float3 toOccluder = occluderVS - s.positionVS;
     // Triangle plane: a point of this triangle, or of a neighbor on a convex shape, lies on or below the plane of the
     // triangle at any view angle; a real occluder (nose, hair, an arm) rises well above it. Seen at a grazing angle,
@@ -1348,10 +1475,11 @@ float MCR_CalcContactShadow(MCRSurface s, MCRDepthInfo di, out float backShade)
     float normalWeight = lerp(1.0, smoothstep(-0.05, 0.25, ndl), saturate(_MCR_ShadowNormalReject));
 
     bool adaptive = MCR_ShadowAdaptive();
-    // Distance LOD / pixel light pass lower the level down to Low; only the Lowest setting itself goes below.
+    // Mirror / VR / distance LOD lower the level down to Low; only the Lowest setting itself goes below.
     int setting = MCR_ShadowQuality();
-    int quality = max(min(setting, 0), setting - MCR_DistanceLOD(s.viewDepth)
-        - (MCR_IS_ADD_PASS && adaptive ? MCR_ADD_PASS_DROP : 0));
+    if(MCR_MirrorLowest()) setting = min(setting, 0);
+    setting = max(min(setting, 0), setting - MCR_VR_LEVELS);
+    int quality = max(min(setting, 0), setting - MCR_DistanceLOD(s.viewDepth));
     int rayCount = max(quality, 0) + 1;                  // 1 / 1 / 2 / 3 / 4
     // A zero cone makes every ray identical, including the step jitter.
     if(_MCR_ShadowSoftness <= 0.0) rayCount = 1;
@@ -1673,11 +1801,14 @@ void Macaron_MarkSpecEnd(inout lilFragData fd)
 
 void Macaron_Apply(inout lilFragData fd)
 {
-#if defined(LIL_OUTLINE) || defined(LIL_FUR) || defined(LIL_PASS_SHADOWCASTER) || defined(LIL_PASS_META) || defined(LIL_PASS_DEPTHONLY) || defined(LIL_PASS_DEPTHNORMALS) || defined(LIL_PASS_MOTIONVECTORS)
+#if defined(LIL_OUTLINE) || defined(LIL_FUR) || defined(LIL_PASS_SHADOWCASTER) || defined(LIL_PASS_META) || defined(LIL_PASS_DEPTHONLY) || defined(LIL_PASS_DEPTHNORMALS) || defined(LIL_PASS_MOTIONVECTORS) || defined(LIL_PASS_FORWARDADD)
     // Outline: lilToon does not compute the normal data in the outline pass, and the outline shell is
     // not in the depth texture. Skipped.
     // Fur (whole Fur SubShader: body pass and shells): occlusion and contact shadow are not compiled at all, to keep
     // fur materials cheap. The Light Adjuster still applies.
+    // Pixel light pass (BRP ForwardAdd): BEFORE_FOG runs again for every pixel light, which would compute the whole
+    // occlusion / contact shadow once more per light, only to darken the light that light adds. Skipped: the base pass
+    // carries the effect.
 #else
     // Capture writes packed data, so AO/contact shading is unnecessary.
     if(Macaron_IsWorldCapture()) return;
@@ -1721,7 +1852,7 @@ void Macaron_Apply(inout lilFragData fd)
     // Everything past the far end of Fade Distance or fully masked out is skipped (MCR_FadeOut is exactly 0
     // there). The view depth of a visible fragment is SV_Position.w.
     // Uzumore (Macaron_UzumoreFS): faded out close to the camera, the depth texture there is not the pushed surface.
-    float visibility = MCR_FadeOut(fd.positionCS.w) * globalMask * amount * (1.0 - mcrUzuFade);
+    float visibility = MCR_FadeOut(fd.positionCS.w) * MCR_NearFade(fd.positionCS.w) * globalMask * amount * (1.0 - mcrUzuFade);
     bool alive = visibility > 0.0;
 #if defined(LIL_RENDER) && LIL_RENDER == 2
     // Masks have already been sampled, preserving their derivatives.
@@ -1768,6 +1899,7 @@ void Macaron_Apply(inout lilFragData fd)
     bool covered = true;
     float reach = 0.0;
     float rayWeight = 0.0;       // mask x sub-pixel fade; > 0 = this pixel marches
+    float rayVRComp = 1.0;       // VR step compensation of this pixel's Ray March budget (1 on desktop)
     bool partner = false;        // quad set: this pixel is really visible (may share with its neighbors)
     [branch]
     if(active)
@@ -1786,6 +1918,19 @@ void Macaron_Apply(inout lilFragData fd)
             }
         #endif
         covered = visibleFactor <= 0.0;
+        // Hidden fragment (opaque / cutout): something closer is already in the depth texture at this pixel, so this
+        // fragment will be drawn over (or was only shaded because it came before its occluder in the draw order).
+        // One depth read instead of the whole occlusion / contact shadow.
+        // Tolerance: the depth texture can hold this very surface a few millimeters closer than this pass draws it
+        // (see the self calibration of the contact shadow, which accepts up to 1 cm). Anything within 1 cm + 1% of the
+        // depth counts as this surface, so a visible surface is never skipped; layers closer together than that
+        // are simply not skipped.
+        // A material that is not in the depth texture reads what is behind it and is never skipped.
+        #if !(defined(LIL_RENDER) && LIL_RENDER == 2)
+            float centerScene = MCR_ReadDepth(s.centerCS, di);
+            bool selfVisible = s.depth - centerScene < 0.01 + 0.01 * s.depth;
+            covered = covered || !selfVisible;
+        #endif
 
         [branch]
         if(useOcc && !covered && rayMethod)
@@ -1793,11 +1938,14 @@ void Macaron_Apply(inout lilFragData fd)
             float reachFull = MCR_OccReachMeters();
             reach = MCR_OccCapReach(reachFull, s.viewDepth, di);
             rayWeight = MCR_SubPixelFade(reach * di.focalPx / s.viewDepth) * occMask;
-            int qualityDrop = MCR_IS_ADD_PASS && MCR_OccAdaptive() ? MCR_ADD_PASS_DROP : 0;
+            int qualityDrop = 0;
             // Without the quad share, a reach shrunk by the near cap also drops one quality level: the effect is
             // large and soft on screen there, so fewer rays are hard to see.
             if(!raySet.quadSet && reach < reachFull * 0.9) qualityDrop = max(qualityDrop, 1);
             MCR_OccBudget(s.viewDepth, reach * di.focalPx / max(s.viewDepth, 0.05), qualityDrop, raySet.rays, raySet.steps);
+            #if MCR_VR_LEVELS
+                rayVRComp = MCR_OccVRComp(s.viewDepth, reach * di.focalPx / max(s.viewDepth, 0.05), qualityDrop, raySet.steps);
+            #endif
             partner = raySet.quadSet && rayWeight > 0.0;
             #if !(defined(LIL_RENDER) && LIL_RENDER == 2)
                 // Opaque / cutout write their own depth: a pixel whose depth texture disagrees is not what the
@@ -1805,8 +1953,7 @@ void Macaron_Apply(inout lilFragData fd)
                 [branch]
                 if(partner)
                 {
-                    float sceneDepth = MCR_ReadDepth(s.centerCS, di);
-                    partner = abs(sceneDepth - s.depth) < MCR_QUAD_VISIBLE_BASE + MCR_QUAD_VISIBLE_REL * s.depth;
+                    partner = abs(centerScene - s.depth) < MCR_QUAD_VISIBLE_BASE + MCR_QUAD_VISIBLE_REL * s.depth;
                 }
             #endif
         }
@@ -1815,6 +1962,8 @@ void Macaron_Apply(inout lilFragData fd)
 #if MCR_QUAD_SHARE
     //--------------------------------------------------------------------------------------------------------------------------
     // 2. Partner exchange (uniform control flow): share only when all 3 neighbors are partners.
+    // raySet.quadSet depends only on material constants (uniform per draw); skip both exchanges when no quad set is used.
+    [branch] if(raySet.quadSet)
     {
         float4 meGeo = float4(s.nView, partner ? s.depth : -1.0);
         float meSize = (float)MCR_RaySetSize(raySet);
@@ -1871,6 +2020,7 @@ void Macaron_Apply(inout lilFragData fd)
     //    weights (itself 1, side neighbors 1/2, diagonal 1/4): every subset is an unbiased estimate on its own, and
     //    weighting itself higher keeps the 4 pixels of a quad different instead of one flat 2x2 block. A fallback
     //    pixel keeps its own result. Neighbors only ever hand over their own directions.
+    [branch] if(raySet.quadSet)
     {
         float4 ox, oy, od;
         MCR_QuadExchange(float4(ownSums, 0.0), quadSign, ox, oy, od);
@@ -1881,7 +2031,7 @@ void Macaron_Apply(inout lilFragData fd)
 #endif
     if(rayWeight > 0.0)
     {
-        float2 r = MCR_RayFinalize(raySums, rayWeight);
+        float2 r = MCR_RayFinalize(raySums, rayWeight * rayVRComp);
         occ = r.x;
         occDistance = r.y;
     }
