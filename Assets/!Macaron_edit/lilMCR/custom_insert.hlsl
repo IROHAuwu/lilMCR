@@ -11,6 +11,19 @@
 
 #include "mcr_world_capture_match.hlsl"
 
+// Texture budget (Unity draws nothing for a pass that uses more than 64 textures)
+//
+// With every lilToon feature enabled (the state of the editor; builds are trimmed to the features in use), the cutout
+// forward pass lit by a shadow casting directional light reaches 65 textures with Macaron's masks: the mesh disappears.
+// One of them is unity_ProbeVolumeSH: Unity's forward shadow macro reads the baked occlusion of a Light Probe Proxy
+// Volume, which an avatar never has. The main light shadow is read without it (same result: the screen space shadow
+// plus the shadow distance fade), which gives that slot back.
+#if defined(LIL_BRP) && defined(LIL_USE_SHADOW) && defined(SHADOWS_SCREEN) && !defined(UNITY_NO_SCREENSPACE_SHADOWS) && !defined(LIL_PASS_FORWARDADD) && defined(LIL_LIGHT_ATTENUATION)
+    #undef LIL_LIGHT_ATTENUATION
+    #define LIL_LIGHT_ATTENUATION(atten,i) \
+        atten = saturate(unitySampleShadow(i._ShadowCoord) + UnityComputeShadowFade(UnityComputeShadowFadeDistance(i.positionWS, dot(_WorldSpaceCameraPos - i.positionWS, UNITY_MATRIX_V[2].xyz))))
+#endif
+
 // Main texture UV (tiling / offset, scroll and rotation), the space the Mask Generator and the capture pass use.
 float2 Macaron_MainUV(float2 uv0)
 {
@@ -1818,11 +1831,13 @@ void Macaron_MarkSpecEnd(inout lilFragData fd)
 #define MCR_MC_MAX 8
 #define MCR_MC_RADIUS_UNIT 0.005
 #define MCR_MC_LENGTH_UNIT 0.01
-// Occlusion fades out at this many radii away from the capsule surface.
-#define MCR_MC_OCC_RANGE 3.0
+// Occlusion fades out at this many radii away from the capsule surface, between these distances (m, x the sender scale).
+#define MCR_MC_OCC_RANGE 2.0
+#define MCR_MC_OCC_RANGE_MIN 0.03
+#define MCR_MC_OCC_RANGE_MAX 0.08
 // Contact shadow: reach along the light direction (m, x the sender scale) and the smallest penumbra (tan of the cone).
-#define MCR_MC_SHADOW_RANGE 0.35
-#define MCR_MC_SHADOW_MIN_CONE 0.03
+#define MCR_MC_SHADOW_RANGE 0.18
+#define MCR_MC_SHADOW_MIN_CONE 0.22
 float4x4 _VRChatContact_Transforms_lilMCR[9];
 float4 _VRChatContact_Data_lilMCR[9];
 
@@ -1891,9 +1906,10 @@ void MCR_CalcMaterialContacts(lilFragData fd, bool useOcc, bool useShadow, float
             // Sphere occlusion at the closest point of the segment (cosine weighted solid angle), faded out with
             // the distance so that it stays a contact effect.
             float o = saturate(max(dot(-d, n), 0.0) * radius * radius / (l * l * l));
-            o *= outside * (1.0 - smoothstep(radius * MCR_MC_OCC_RANGE * 0.5, radius * MCR_MC_OCC_RANGE, gap));
+            float occRange = clamp(radius * MCR_MC_OCC_RANGE, MCR_MC_OCC_RANGE_MIN * scale, MCR_MC_OCC_RANGE_MAX * scale);
+            o *= outside * (1.0 - smoothstep(occRange * 0.35, occRange, gap));
             occOpen *= 1.0 - o;
-            distSum += saturate(gap / (radius * MCR_MC_OCC_RANGE)) * o;
+            distSum += saturate(gap / occRange) * o;
             distWeight += o;
         }
 
