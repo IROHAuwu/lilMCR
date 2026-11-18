@@ -40,6 +40,9 @@ namespace liltoon_MCR
         // Quality tier of the converted materials: 0 Lightest .. 4 Overkill.
         private const string PrefTier = "Macaron.Converter.Tier5";
         private const string PrefRestoreCleanup = "Macaron.Converter.RestoreCleanup";
+        // Where occlusion and contact shadow come from: 0 = camera depth texture, 1 = Material Contacts (MacaronContactRig.cs).
+        private const string PrefContactMode = "Macaron.Converter.ContactMode";
+        private static bool ContactModeSelected { get { return EditorPrefs.GetInt(PrefContactMode, 0) == 1 && MacaronContactRig.Supported; } }
         // Stored in the .meta (importer userData) of every converted material: "MacaronSource:<guid>:<local id>".
         private const string SourceTag = "MacaronSource:";
         private Dictionary<Material, Material> restoreMap = new Dictionary<Material, Material>();
@@ -193,6 +196,23 @@ namespace liltoon_MCR
             int picked = MacaronGUI.TierButtons(tier);
             if(picked >= 0) EditorPrefs.SetInt(PrefTier, picked);
             GUILayout.Space(4f);
+            // Source of occlusion / contact shadow, written to every converted / reset material.
+            EditorGUILayout.LabelField(ML.T("遮蔽與接觸陰影的計算方式"), EditorStyles.boldLabel);
+            using(new EditorGUI.DisabledScope(!MacaronContactRig.Supported))
+            {
+                int mode = ContactModeSelected ? 1 : 0;
+                int nextMode = EditorGUILayout.Popup(mode, new[] { ML.T("深度貼圖（原本的方式，細節完整）"), ML.T("Material Contacts（實驗，輕量但沒有細節）") });
+                if(nextMode != mode) EditorPrefs.SetInt(PrefContactMode, nextMode);
+            }
+            if(!MacaronContactRig.Supported)
+            {
+                EditorGUILayout.LabelField(ML.T("Material Contacts 需要 VRChat SDK 3.10.6 以上。"), EditorStyles.wordWrappedMiniLabel);
+            }
+            else if(ContactModeSelected)
+            {
+                EditorGUILayout.LabelField(ML.T("用頭、軀幹、手臂、手、大腿的膠囊體計算遮蔽與接觸陰影，不讀深度貼圖，也不需要 MCR_DepthSource。只有大範圍的柔和陰影，沒有髮絲、皺摺等細節。會在角色底下建立 MCR_Contacts（Contact 數量會計入效能評級）。PCSS 不受影響。"), EditorStyles.wordWrappedMiniLabel);
+            }
+            GUILayout.Space(4f);
             int work = CountWork();
             using(new EditorGUI.DisabledScope(avatar == null || work == 0))
             {
@@ -202,7 +222,10 @@ namespace liltoon_MCR
                 }
             }
             EditorGUILayout.LabelField(ML.F("轉換後的材質存放在 {0}/<角色名稱>，原本的材質不會被修改。可用 Ctrl+Z 復原。", MacaronCore.ConvertedFolder), EditorStyles.wordWrappedMiniLabel);
-            EditorGUILayout.LabelField(ML.T("同時會在角色底下建立 MCR_DepthSource（讓 Unity 產生深度貼圖用的光源，已經有就不會重複建立）。"), EditorStyles.wordWrappedMiniLabel);
+            if(!ContactModeSelected)
+            {
+                EditorGUILayout.LabelField(ML.T("同時會在角色底下建立 MCR_DepthSource（讓 Unity 產生深度貼圖用的光源，已經有就不會重複建立）。"), EditorStyles.wordWrappedMiniLabel);
+            }
             using(new EditorGUI.DisabledScope(!MacaronLightAdjuster.Available))
             {
                 bool add = EditorPrefs.GetBool(PrefAddAdjuster, true);
@@ -407,7 +430,24 @@ namespace liltoon_MCR
             Undo.SetCurrentGroupName("Macaron Avatar Convert");
             int undoGroup = Undo.GetCurrentGroup();
 
-            bool depthSourceAdded = EnsureDepthSource();
+            // Material Contacts mode reads no depth texture: the depth light is not added, and an existing one is removed
+            // unless World Shadow (which still needs the depth texture) is on the avatar.
+            bool contactMode = ContactModeSelected;
+            bool depthSourceAdded = false;
+            bool depthSourceRemoved = false;
+            if(!contactMode)
+            {
+                depthSourceAdded = EnsureDepthSource();
+            }
+            else
+            {
+                Transform depth = avatar.transform.Find(MacaronCore.DepthSourceName);
+                if(depth != null && avatar.transform.Find(MacaronWorldShadow.ObjectName) == null)
+                {
+                    Undo.DestroyObjectImmediate(depth.gameObject);
+                    depthSourceRemoved = true;
+                }
+            }
             int tier = Mathf.Clamp(EditorPrefs.GetInt(PrefTier, MacaronCore.TierStandard), 0, MacaronCore.TierOverkill);
 
             Dictionary<Material, Material> result = new Dictionary<Material, Material>(plan.Count);
@@ -443,6 +483,7 @@ namespace liltoon_MCR
 
                 MacaronCore.ApplyTier(output, tier);
                 ApplyConversionPolicy(output);
+                if(output.HasProperty("_MCR_ContactMode")) output.SetFloat("_MCR_ContactMode", contactMode ? 1f : 0f);
                 MacaronCore.ApplyDirection(output, space, direction);
                 MacaronCore.SetConvertedDirection(output, space, direction);
                 MacaronCore.WriteAvatarBasis(output, e.Renderer, avatar.transform);
@@ -465,6 +506,20 @@ namespace liltoon_MCR
             WarnSharedAxis(result, log);
             // Per-avatar part of the tier (lilMCR PCSS light resolution, when that add-on and its light exist).
             MacaronCore.ApplyTierToAvatar(avatar, tier);
+
+            // Material Contacts: after the new materials are assigned (the receivers target renderers with Macaron
+            // materials). In depth mode a rig left from an earlier conversion is removed.
+            string contactMessage = null;
+            if(contactMode)
+            {
+                contactMessage = MacaronContactRig.ResultMessage(MacaronContactRig.Setup(avatar));
+                log.AppendLine(contactMessage);
+            }
+            else if(MacaronContactRig.Remove(avatar))
+            {
+                contactMessage = ML.T("已移除 MCR_Contacts。");
+                log.AppendLine(contactMessage);
+            }
 
             // Light Adjuster: after the new materials are assigned (it targets renderers with Macaron materials).
             string adjusterMessage = null;
@@ -493,6 +548,8 @@ namespace liltoon_MCR
             resultType = MessageType.Info;
             resultMessage = ML.F("完成！轉換 {0}、重置 {1}、略過 {2}。", converted, reset, skipped) +
                             (depthSourceAdded ? "\n" + ML.T("已把 MCR_DepthSource（產生深度貼圖用的光源）加到角色底下。") : string.Empty) +
+                            (depthSourceRemoved ? "\n" + ML.T("已移除 MCR_DepthSource。") : string.Empty) +
+                            (contactMessage != null ? "\n" + contactMessage : string.Empty) +
                             (adjusterMessage != null ? "\n" + adjusterMessage : string.Empty) +
                             (string.IsNullOrEmpty(uzumoreMessage) ? string.Empty : "\n" + uzumoreMessage) +
                             "\n" + ML.T("詳細內容已輸出到 Console。");
@@ -654,6 +711,10 @@ namespace liltoon_MCR
                 {
                     Undo.DestroyObjectImmediate(adjuster.gameObject);
                     message.Append("\n").Append(ML.T("已移除光照調節器。"));
+                }
+                if(MacaronContactRig.Remove(avatar))
+                {
+                    message.Append("\n").Append(ML.T("已移除 MCR_Contacts。"));
                 }
             }
 

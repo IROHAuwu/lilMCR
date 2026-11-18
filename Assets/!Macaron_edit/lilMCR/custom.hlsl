@@ -12,6 +12,7 @@
 #define LIL_CUSTOM_PROPERTIES \
     float _MCR_Active; \
     float _MCR_Amount; \
+    float _MCR_ContactMode; \
     float4 _MCR_CasterMask_ST; \
     float _MCR_CasterMaskAmount; \
     float4 _MCR_WorldCapture; \

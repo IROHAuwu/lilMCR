@@ -196,6 +196,8 @@ namespace liltoon_MCR
             //--------------------------------------------------------------------------------------
             MacaronSection basic = new MacaronSection { Id = "basic", Title = "基本設定", EnableProp = "_MCR_Active" };
             basic.Props.Add(P("_MCR_Amount", "整體強度", MacaronPropKind.Slider, "遮蔽與接觸陰影的總強度。"));
+            // Material Contacts mode (custom_insert.hlsl, MacaronContactRig.cs). Set by the converter for the whole avatar.
+            basic.Props.Add(P("_MCR_ContactMode", "Material Contacts 模式", MacaronPropKind.Toggle, "開啟後，遮蔽與接觸陰影改用角色身上 Contact 的膠囊體計算，不讀深度貼圖。需要角色底下有 MCR_Contacts（由角色轉換建立），沒有的話不會有任何效果。請用角色轉換切換，讓整個角色一致。"));
             // Local Only (mcr_local_only.hlsl, MacaronLocalOnly.cs). A user choice: not part of the quality tiers.
             basic.Props.Add(P("_MCR_LocalOnly", "僅自己可見", MacaronPropKind.Toggle, "開啟後，lilMCR 的所有效果（遮蔽、接觸陰影、埋入、光照調節、世界陰影、PCSS）只在你自己的畫面顯示；其他玩家看到的是沒有 lilMCR 效果的原版 lilToon。需要光照調節器（判斷是不是自己）；沒有光照調節器時連自己也看不到效果。你自己的鏡子與相機會拍到效果。也可以在光照調節器勾選「僅自己可見」加入選單，在遊戲中切換（預設不加入）。"));
             basic.Props.Add(P("_MCR_FloorBrightness", "最低亮度", MacaronPropKind.Slider, "不會比原本顏色的這個比例更暗（0.25 = 最暗到原本的 25%）。避免角色變全黑。"));

@@ -1797,6 +1797,137 @@ void Macaron_MarkSpecEnd(inout lilFragData fd)
 }
 
 //------------------------------------------------------------------------------------------------------------------------------
+// Material Contacts mode (_MCR_ContactMode)
+//
+// Occlusion and contact shadow from analytic capsules instead of the camera depth texture. The Macaron tools place
+// VRChat Contact Senders on the bones (head, torso, arms, hands, thighs) and a Contact Receiver that writes the
+// nearest 8 of them to the renderers ("Write to Shaders", VRChat SDK 3.10.6 or newer). No depth texture is needed,
+// so the avatar does not carry the depth light, and nothing depends on the screen (VR, mirrors, off-screen parts).
+// It is a coarse effect: limbs and head as capsules, no creases, hair or cloth detail.
+//
+// Buffers (VRChat, see VRCContacts.cginc; declared here so that older SDKs still compile, where they stay 0):
+//   _VRChatContact_Transforms_lilMCR[i] : world matrix of sender i's root with its position / rotation offset, in
+//                                         descending proximity. Its scale is the root's lossy scale: the shape size
+//                                         (radius, height) is NOT in the matrix.
+//   _VRChatContact_Data_lilMCR[i].y     : bit n = the sender has the receiver's tag n. [8].y = number of senders.
+// The size therefore travels in the tags (MacaronContactRig.cs writes both ends, same order):
+//   tag 0      : "lilMCR"
+//   tags 1..5  : radius bits      -> radius      = (value + 1) x MCR_MC_RADIUS_UNIT  (root-local units)
+//   tags 6..10 : half length bits -> half length = value x MCR_MC_LENGTH_UNIT        (segment between the cap centers)
+// Capsule axis = the matrix Y axis. World size = local size x the largest axis scale of the matrix (as VRChat does).
+#define MCR_MC_MAX 8
+#define MCR_MC_RADIUS_UNIT 0.005
+#define MCR_MC_LENGTH_UNIT 0.01
+// Occlusion fades out at this many radii away from the capsule surface.
+#define MCR_MC_OCC_RANGE 3.0
+// Contact shadow: reach along the light direction (m, x the sender scale) and the smallest penumbra (tan of the cone).
+#define MCR_MC_SHADOW_RANGE 0.35
+#define MCR_MC_SHADOW_MIN_CONE 0.03
+float4x4 _VRChatContact_Transforms_lilMCR[9];
+float4 _VRChatContact_Data_lilMCR[9];
+
+// occ: 0..1 after Amount / Contrast. occDistance: 0 near .. 1 far. castShadow / backShade as MCR_CalcContactShadow.
+void MCR_CalcMaterialContacts(lilFragData fd, bool useOcc, bool useShadow, float occMask,
+    out float occ, out float occDistance, out float castShadow, out float backShade)
+{
+    occ = 0.0;
+    occDistance = 0.0;
+    castShadow = 0.0;
+    backShade = 0.0;
+
+    float3 p = fd.positionWS;
+    // Interpolated vertex normal, not the normal-mapped one (as MCR_GetSurface); facing the viewer.
+    float3 n = dot(fd.origN, fd.origN) > 0.25 ? fd.origN : fd.N;
+    n *= rsqrt(max(dot(n, n), MCR_EPS));
+    if(dot(n, fd.V) < 0.0) n = -n;
+
+    // Toward the light, world space (LIL_MATRIX_V is a rotation: its transpose is the inverse).
+    float3 lightWS = mul(MCR_ShadowLightDirView(), (float3x3)LIL_MATRIX_V);
+    float ndl = dot(n, lightWS);
+    float normalWeight = 1.0;
+    if(useShadow)
+    {
+        backShade = 1.0 - smoothstep(-0.12, 0.28, ndl);
+        normalWeight = lerp(1.0, smoothstep(-0.05, 0.25, ndl), saturate(_MCR_ShadowNormalReject));
+    }
+    float coneTan = max(tan(radians(clamp(_MCR_ShadowSoftness, 0.0, 30.0))), MCR_MC_SHADOW_MIN_CONE);
+
+    int count = clamp(asint(_VRChatContact_Data_lilMCR[MCR_MC_MAX].y), 0, MCR_MC_MAX);
+    float occOpen = 1.0;            // product of (1 - occlusion of each capsule)
+    float shadowOpen = 1.0;             // product of (1 - shadow of each capsule)
+    float distSum = 0.0;
+    float distWeight = 0.0;
+    [loop]
+    for(int i = 0; i < MCR_MC_MAX; i++)
+    {
+        if(i >= count) break;
+        uint bits = asuint(_VRChatContact_Data_lilMCR[i].y);
+        if((bits & 1u) == 0u) continue;
+        float4x4 m = _VRChatContact_Transforms_lilMCR[i];
+        float3 axis = float3(m._m01, m._m11, m._m21);
+        float axisLength = length(axis);
+        float scale = max(max(length(float3(m._m00, m._m10, m._m20)), axisLength), length(float3(m._m02, m._m12, m._m22)));
+        if(scale < MCR_EPS) continue;
+        float radius = (float)(((bits >> 1) & 31u) + 1u) * MCR_MC_RADIUS_UNIT * scale;
+        float halfLength = (float)((bits >> 6) & 31u) * MCR_MC_LENGTH_UNIT * scale;
+        float3 center = float3(m._m03, m._m13, m._m23);
+        float3 halfAxis = axis * (halfLength / max(axisLength, MCR_EPS));
+        float3 a = center - halfAxis;
+        float3 ba = halfAxis * 2.0;
+        float baba = max(dot(ba, ba), MCR_EPS);
+
+        // Closest point of the capsule segment.
+        float3 pa = p - a;
+        float3 d = pa - ba * saturate(dot(pa, ba) / baba);
+        float l = max(length(d), MCR_EPS);
+        float gap = l - radius;                      // distance to the capsule surface (negative inside)
+        // A point inside the capsule is the limb the capsule stands for: no effect from it.
+        float outside = smoothstep(0.0, radius * 0.25 + 0.002, gap);
+        [branch]
+        if(outside <= 0.0) continue;
+
+        if(useOcc)
+        {
+            // Sphere occlusion at the closest point of the segment (cosine weighted solid angle), faded out with
+            // the distance so that it stays a contact effect.
+            float o = saturate(max(dot(-d, n), 0.0) * radius * radius / (l * l * l));
+            o *= outside * (1.0 - smoothstep(radius * MCR_MC_OCC_RANGE * 0.5, radius * MCR_MC_OCC_RANGE, gap));
+            occOpen *= 1.0 - o;
+            distSum += saturate(gap / (radius * MCR_MC_OCC_RANGE)) * o;
+            distWeight += o;
+        }
+
+        if(useShadow)
+        {
+            // Closest approach of the ray toward the light and the segment; one refinement of the segment point.
+            float3 ro = p + n * (0.002 * scale);
+            float3 oa = ro - a;
+            float dba = dot(lightWS, ba);
+            float denom = baba - dba * dba;
+            float oad = dot(oa, lightWS);
+            float oaba = dot(oa, ba);
+            float h = denom > MCR_EPS ? saturate((oaba - oad * dba) / denom) : 0.5;
+            float t = max(dot(a + ba * h - ro, lightWS), 0.0001);
+            h = saturate(dot(ro + lightWS * t - a, ba) / baba);
+            t = max(dot(a + ba * h - ro, lightWS), 0.0001);
+            float miss = length(ro + lightWS * t - (a + ba * h)) - radius;   // < 0: the ray goes through
+            // Share of the light cone the capsule covers at that distance.
+            float sh = 1.0 - saturate(0.5 + 0.5 * miss / (t * coneTan));
+            float range = MCR_MC_SHADOW_RANGE * scale;
+            sh *= outside * (1.0 - smoothstep(range * 0.5, range, t));
+            shadowOpen *= 1.0 - sh;
+        }
+    }
+
+    if(useOcc)
+    {
+        occ = MCR_OccContrastMap((1.0 - occOpen) * occMask * max(_MCR_OccAmount, 0.0));
+        occDistance = saturate(distSum / max(distWeight, MCR_EPS));
+    }
+    if(useShadow) castShadow = (1.0 - shadowOpen) * normalWeight;
+}
+
+//------------------------------------------------------------------------------------------------------------------------------
 // Entry point (called from BEFORE_FOG, see custom.hlsl)
 
 void Macaron_Apply(inout lilFragData fd)
@@ -1852,7 +1983,9 @@ void Macaron_Apply(inout lilFragData fd)
     // Everything past the far end of Fade Distance or fully masked out is skipped (MCR_FadeOut is exactly 0
     // there). The view depth of a visible fragment is SV_Position.w.
     // Uzumore (Macaron_UzumoreFS): faded out close to the camera, the depth texture there is not the pushed surface.
-    float visibility = MCR_FadeOut(fd.positionCS.w) * MCR_NearFade(fd.positionCS.w) * globalMask * amount * (1.0 - mcrUzuFade);
+    // Material Contacts mode (uniform per draw): no depth texture is read at all.
+    bool contactMode = _MCR_ContactMode > 0.5;
+    float visibility = MCR_FadeOut(fd.positionCS.w) * (contactMode ? 1.0 : MCR_NearFade(fd.positionCS.w)) * globalMask * amount * (1.0 - mcrUzuFade);
     bool alive = visibility > 0.0;
 #if defined(LIL_RENDER) && LIL_RENDER == 2
     // Masks have already been sampled, preserving their derivatives.
@@ -1884,7 +2017,7 @@ void Macaron_Apply(inout lilFragData fd)
     // Uniform per draw: the quad share build, Ray March and the material's Quality setting (not the per-pixel
     // distance LOD, so the 4 pixels of a quad always agree). Best / Fine / Standard (no 2x2): off, Standard: 1/2, Light: 1/4.
     int quadQuality = MCR_OccQualitySetting();
-    raySet.quadSet = MCR_QUAD_SHARE && rayMethod && quadQuality <= 1;
+    raySet.quadSet = MCR_QUAD_SHARE && rayMethod && quadQuality <= 1 && !contactMode;
     raySet.quadDiv = quadQuality == 0 ? 4 : 2;
     raySet.share = false;
     raySet.quadRotation = MCR_IGN(floor(fd.positionCS.xy * 0.5)) * saturate(_MCR_OccNoise);
@@ -1894,7 +2027,7 @@ void Macaron_Apply(inout lilFragData fd)
     //--------------------------------------------------------------------------------------------------------------------------
     // 1. Per-pixel setup (cheap): surface, Alpha Aware, Ray March reach / weight / budget.
     // No depth texture -> effect off (no fake darkening that could turn the avatar black).
-    bool active = di.present && (useOcc || useShadow);
+    bool active = !contactMode && di.present && (useOcc || useShadow);
     MCRSurface s = (MCRSurface)0;
     bool covered = true;
     float reach = 0.0;
@@ -2012,6 +2145,12 @@ void Macaron_Apply(inout lilFragData fd)
     if(active && useShadow && !covered)
     {
         castShadow = MCR_CalcContactShadow(s, di, backShade);
+    }
+
+    [branch]
+    if(contactMode && (useOcc || useShadow))
+    {
+        MCR_CalcMaterialContacts(fd, useOcc, useShadow, occMask, occ, occDistance, castShadow, backShade);
     }
 
 #if MCR_QUAD_SHARE

@@ -2,6 +2,7 @@
         // Macaron
         [ToggleUI] _MCR_Active ("Macaron", Float) = 1
         _MCR_Amount ("Amount", Range(0, 1)) = 1
+        [ToggleUI] _MCR_ContactMode ("Material Contacts", Float) = 0
         _MCR_CasterMask ("Caster Mask", 2D) = "white" {}
         _MCR_CasterMaskAmount ("Caster Mask Amount", Range(0, 1)) = 1
         [HideInInspector] _MCR_WorldCapture ("World Capture", Vector) = (0,0,0,0)
