@@ -23,7 +23,7 @@ namespace liltoon_MCR
         public const string ShaderParameter = "lilMCRTouch";    // _VRChatContact_Transforms_lilMCRTouch in the shader
         public const string FingerTag = "Finger";
         private const string DialogTitle = "lilMCR Touch Dent";
-        private const string PrefSelf = "Macaron.Touch.AllowSelf";
+        public const string PrefSelf = "Macaron.Touch.AllowSelf";
         private const int RenderersPerReceiver = 4;
         private const int MaxReceivers = 6;
 
@@ -62,6 +62,31 @@ namespace liltoon_MCR
             return null;
         }
 
+        // The renderers the avatar's MCR_Touch writes to now, and whether it takes the wearer's own fingers.
+        public static HashSet<Renderer> CurrentTargets(GameObject avatar, out bool allowSelf)
+        {
+            HashSet<Renderer> targets = new HashSet<Renderer>();
+            allowSelf = false;
+            Transform holder = Find(avatar);
+            if(holder == null) return targets;
+#if VRC_SDK_VRCSDK3
+            foreach(VRCContactReceiver receiver in holder.GetComponentsInChildren<VRCContactReceiver>(true))
+            {
+                allowSelf |= receiver.allowSelf;
+                SerializedProperty list = new SerializedObject(receiver).FindProperty("shaderTargetRenderers");
+                if(list == null || !list.isArray) continue;
+                for(int i = 0; i < list.arraySize; i++)
+                {
+                    Renderer r = list.GetArrayElementAtIndex(i).objectReferenceValue as Renderer;
+                    if(r != null) targets.Add(r);
+                }
+            }
+#endif
+            return targets;
+        }
+
+        public const int MaxRenderers = RenderersPerReceiver * MaxReceivers;
+
         // Removes MCR_Touch and turns Touch Dent off in the avatar's Macaron materials.
         public static bool Remove(GameObject avatar)
         {
@@ -72,7 +97,7 @@ namespace liltoon_MCR
             return true;
         }
 
-        private static List<Renderer> MacaronRenderers(GameObject avatar)
+        public static List<Renderer> MacaronRenderers(GameObject avatar)
         {
             List<Renderer> renderers = new List<Renderer>();
             foreach(Renderer r in avatar.GetComponentsInChildren<Renderer>(true))
@@ -108,7 +133,7 @@ namespace liltoon_MCR
             return r.enabled && r.gameObject.activeInHierarchy && !r.CompareTag("EditorOnly");
         }
 
-        private static int RendererVertexCount(Renderer r)
+        public static int RendererVertexCount(Renderer r)
         {
             Mesh mesh = null;
             SkinnedMeshRenderer smr = r as SkinnedMeshRenderer;
@@ -177,14 +202,23 @@ namespace liltoon_MCR
         // closed fist then press on each other as well).
         public static Result Setup(GameObject avatar, bool allowSelf)
         {
+            return Setup(avatar, allowSelf, null);
+        }
+
+        // only: the renderers to dent (null = every renderer with a Macaron material). Touch Dent is turned off in the
+        // materials no chosen renderer uses.
+        public static Result Setup(GameObject avatar, bool allowSelf, ICollection<Renderer> only)
+        {
             Result result = new Result();
             result.AllowSelf = allowSelf;
 #if VRC_SDK_VRCSDK3
             if(avatar == null) { result.Error = ML.T("沒有選擇角色。"); return result; }
             if(!Supported) { result.Error = ML.T("需要 VRChat SDK 3.10.6 以上。"); return result; }
 
-            List<Renderer> renderers = MacaronRenderers(avatar);
-            if(renderers.Count == 0) { result.Error = ML.T("角色上沒有使用 Macaron 材質的 Renderer。"); return result; }
+            List<Renderer> all = MacaronRenderers(avatar);
+            if(all.Count == 0) { result.Error = ML.T("角色上沒有使用 Macaron 材質的 Renderer。"); return result; }
+            List<Renderer> renderers = only == null ? new List<Renderer>(all) : all.FindAll(r => only.Contains(r));
+            if(renderers.Count == 0) { result.Error = ML.T("沒有勾選任何網格。"); return result; }
             // When there are more renderers than the receivers can write to: the ones shown now first, then the
             // largest meshes (hierarchy order for equal keys).
             List<Renderer> ordered = new List<Renderer>(renderers);
@@ -240,7 +274,22 @@ namespace liltoon_MCR
             result.Receivers = receivers;
             result.Renderers = Mathf.Min(renderers.Count, receivers * RenderersPerReceiver);
             result.SkippedRenderers = renderers.Count - result.Renderers;
-            result.Materials = SetEnabled(renderers.GetRange(0, result.Renderers), true);
+            List<Renderer> written = renderers.GetRange(0, result.Renderers);
+            result.Materials = SetEnabled(written, true);
+            // Off in the materials only the other renderers use (a material shared with a chosen renderer stays on:
+            // a renderer no receiver writes to gets no contact data and does not move).
+            HashSet<Material> kept = new HashSet<Material>();
+            foreach(Renderer r in written) foreach(Material m in r.sharedMaterials) if(m != null) kept.Add(m);
+            foreach(Renderer r in all)
+            {
+                foreach(Material m in r.sharedMaterials)
+                {
+                    if(m == null || kept.Contains(m) || !MacaronCore.IsMacaronMaterial(m) || !m.HasProperty("_MCR_TouchEnable") || m.GetFloat("_MCR_TouchEnable") < 0.5f) continue;
+                    Undo.RecordObject(m, "lilMCR Touch Dent");
+                    m.SetFloat("_MCR_TouchEnable", 0f);
+                    EditorUtility.SetDirty(m);
+                }
+            }
 #else
             result.Error = ML.T("需要 VRChat SDK。");
 #endif
@@ -268,7 +317,7 @@ namespace liltoon_MCR
             return root != null ? root.gameObject : null;
         }
 
-        [MenuItem(MacaronCore.MenuRoot + "Touch Dent 触れ凹み/Add or Update 追加・更新 (Selected Avatar)", false, 80)]
+        [MenuItem(MacaronCore.MenuRoot + "Touch Dent 触れ凹み/Add or Update (All Meshes) 追加・更新 (Selected Avatar)", false, 80)]
         private static void MenuAdd()
         {
             GameObject avatar = SelectedAvatar();
@@ -284,7 +333,7 @@ namespace liltoon_MCR
             EditorUtility.DisplayDialog(DialogTitle, Remove(avatar) ? ML.T("已移除 MCR_Touch，並關閉材質的觸碰凹陷。") : ML.T("這個角色沒有 MCR_Touch。"), "OK");
         }
 
-        [MenuItem(MacaronCore.MenuRoot + "Touch Dent 触れ凹み/Add or Update 追加・更新 (Selected Avatar)", true)]
+        [MenuItem(MacaronCore.MenuRoot + "Touch Dent 触れ凹み/Add or Update (All Meshes) 追加・更新 (Selected Avatar)", true)]
         [MenuItem(MacaronCore.MenuRoot + "Touch Dent 触れ凹み/Remove 削除 (Selected Avatar)", true)]
         private static bool MenuValidate()
         {
@@ -340,6 +389,269 @@ namespace liltoon_MCR
         {
             Menu.SetChecked(SelfMenu, EditorPrefs.GetBool(PrefSelf, false));
             return true;
+        }
+    }
+
+    // Touch Dent setup window: every mesh of the avatar as a button. Hovering one lights it up in the Scene view,
+    // clicking checks it, and "Apply" builds MCR_Touch for the checked meshes only.
+    public class MacaronTouchWindow : EditorWindow
+    {
+        [SerializeField] private GameObject avatar;
+        [SerializeField] private List<Renderer> chosen = new List<Renderer>();
+        [SerializeField] private bool allowSelf;
+        [SerializeField] private Vector2 scroll;
+        private GameObject listedAvatar;
+        private readonly List<Renderer> macaron = new List<Renderer>();     // can dent
+        private readonly List<Renderer> others = new List<Renderer>();      // not converted to Macaron
+        private Renderer hover;
+        private Renderer bakedFor;
+        private Mesh baked;
+        private Material highlight;
+        private string resultMessage;
+        private bool resultOk;
+
+        [MenuItem("Macaron/lilMCR/Touch Dent 触れ凹み", false, 3)]
+        public static void Open()
+        {
+            MacaronTouchWindow w = GetWindow<MacaronTouchWindow>();
+            w.titleContent = new GUIContent(ML.T("Macaron 觸碰凹陷"));
+            w.minSize = new Vector2(380f, 520f);
+            if(Selection.activeGameObject != null && !EditorUtility.IsPersistent(Selection.activeGameObject) && w.avatar == null)
+            {
+                Transform root = MacaronCore.FindAvatarRoot(Selection.activeGameObject.transform);
+                w.avatar = root != null ? root.gameObject : null;
+            }
+        }
+
+        private void OnEnable()
+        {
+            wantsMouseMove = true;
+            SceneView.duringSceneGui += OnSceneGUI;
+            EditorApplication.update += WatchMouse;
+            listedAvatar = null;
+        }
+
+        private void OnDisable()
+        {
+            SceneView.duringSceneGui -= OnSceneGUI;
+            EditorApplication.update -= WatchMouse;
+            SetHover(null);
+            if(baked != null) DestroyImmediate(baked);
+            if(highlight != null) DestroyImmediate(highlight);
+        }
+
+        // The highlight goes away when the pointer leaves the window.
+        private void WatchMouse()
+        {
+            if(hover != null && mouseOverWindow != this) { SetHover(null); Repaint(); }
+        }
+
+        private void SetHover(Renderer r)
+        {
+            if(hover == r) return;
+            hover = r;
+            SceneView.RepaintAll();
+        }
+
+        private void Relist()
+        {
+            listedAvatar = avatar;
+            macaron.Clear();
+            others.Clear();
+            chosen.RemoveAll(r => r == null);
+            if(avatar == null) return;
+            HashSet<Renderer> canDent = new HashSet<Renderer>(MacaronTouch.MacaronRenderers(avatar));
+            foreach(Renderer r in avatar.GetComponentsInChildren<Renderer>(true))
+            {
+                if(!(r is SkinnedMeshRenderer) && !(r is MeshRenderer)) continue;
+                if(MacaronTouch.RendererVertexCount(r) == 0) continue;
+                if(canDent.Contains(r)) macaron.Add(r); else others.Add(r);
+            }
+            // Start from what the avatar's MCR_Touch already writes to.
+            bool self;
+            HashSet<Renderer> current = MacaronTouch.CurrentTargets(avatar, out self);
+            chosen.Clear();
+            foreach(Renderer r in macaron) if(current.Contains(r)) chosen.Add(r);
+            if(current.Count > 0) allowSelf = self;
+            else allowSelf = EditorPrefs.GetBool(MacaronTouch.PrefSelf, false);
+        }
+
+        private void OnGUI()
+        {
+            titleContent.text = ML.T("Macaron 觸碰凹陷");
+            MacaronGUI.Banner("Macaron", ML.T("選出要被手指壓凹的網格，按一下就完成。"));
+            ML.LanguagePopup();
+
+            if(!MacaronTouch.Supported)
+            {
+                EditorGUILayout.HelpBox(ML.T("觸碰凹陷需要 VRChat SDK 3.10.6 以上（Contact Receiver 的 Write to Shaders）。"), MessageType.Warning);
+                return;
+            }
+
+            // 1. Avatar
+            MacaronGUI.Step(1, ML.T("選擇角色"));
+            EditorGUI.BeginChangeCheck();
+            avatar = (GameObject)EditorGUILayout.ObjectField(avatar, typeof(GameObject), true, GUILayout.Height(20f));
+            if(EditorGUI.EndChangeCheck()) resultMessage = null;
+            if(avatar != null && EditorUtility.IsPersistent(avatar))
+            {
+                EditorGUILayout.HelpBox(ML.T("請放入場景（Hierarchy）中的角色，而不是 Project 裡的 Prefab。"), MessageType.Error);
+                return;
+            }
+            if(avatar != listedAvatar) Relist();
+            if(avatar == null)
+            {
+                EditorGUILayout.LabelField(ML.T("從 Hierarchy 拖曳角色到上方欄位。"), EditorStyles.wordWrappedMiniLabel);
+                SetHover(null);
+                return;
+            }
+
+            // 2. Meshes
+            MacaronGUI.Step(2, ML.T("勾選要凹陷的網格"));
+            EditorGUILayout.LabelField(ML.T("滑鼠移到按鈕上，Scene 視窗裡對應的網格會亮起來；確認是要的部位後點一下勾選。"), EditorStyles.wordWrappedMiniLabel);
+            using(new EditorGUILayout.HorizontalScope())
+            {
+                if(GUILayout.Button(ML.T("全選"), EditorStyles.miniButtonLeft)) { chosen.Clear(); chosen.AddRange(macaron); }
+                if(GUILayout.Button(ML.T("全不選"), EditorStyles.miniButtonMid)) chosen.Clear();
+                if(GUILayout.Button(ML.T("重新整理"), EditorStyles.miniButtonRight)) Relist();
+            }
+
+            Renderer over = null;
+            scroll = EditorGUILayout.BeginScrollView(scroll);
+            if(macaron.Count == 0)
+            {
+                EditorGUILayout.HelpBox(ML.T("這個角色沒有使用 Macaron 材質的網格。請先用「Avatar Converter」轉換。"), MessageType.Info);
+            }
+            foreach(Renderer r in macaron)
+            {
+                if(r == null) continue;
+                bool on = chosen.Contains(r);
+                if(DrawRow(r, on, true, ref over))
+                {
+                    if(on) chosen.Remove(r); else chosen.Add(r);
+                }
+            }
+            if(others.Count > 0)
+            {
+                GUILayout.Space(6f);
+                EditorGUILayout.LabelField(ML.T("尚未轉換成 Macaron 的網格（不能凹陷）"), EditorStyles.miniBoldLabel);
+                foreach(Renderer r in others)
+                {
+                    if(r != null) DrawRow(r, false, false, ref over);
+                }
+            }
+            EditorGUILayout.EndScrollView();
+            if(Event.current.type == EventType.Repaint || Event.current.type == EventType.MouseMove) SetHover(over);
+            if(Event.current.type == EventType.MouseMove) Repaint();
+
+            // 3. Apply
+            MacaronGUI.Step(3, ML.T("套用"));
+            int count = chosen.Count;
+            int limit = MacaronTouch.MaxRenderers;
+            EditorGUILayout.LabelField(ML.F("已勾選 {0} 個網格（上限 {1} 個），會使用 {2} 個 Contact Receiver。", count, limit, Mathf.Min((count + 3) / 4, limit / 4)), EditorStyles.wordWrappedMiniLabel);
+            if(count > limit)
+            {
+                EditorGUILayout.HelpBox(ML.F("超過上限：只有顯示中、面數最多的 {0} 個會有效果。", limit), MessageType.Warning);
+            }
+            allowSelf = EditorGUILayout.ToggleLeft(new GUIContent(ML.T("自己的手指也會造成凹陷"), ML.T("方便一個人對著鏡子測試。相鄰的手指和握拳時也會互相壓到。")), allowSelf);
+
+            using(new EditorGUI.DisabledScope(count == 0))
+            {
+                if(MacaronGUI.BigButton(count > 0 ? ML.F("套用到勾選的網格（{0} 個）", count) : ML.T("套用到勾選的網格"), 36f))
+                {
+                    EditorPrefs.SetBool(MacaronTouch.PrefSelf, allowSelf);
+                    MacaronTouch.Result result = MacaronTouch.Setup(avatar, allowSelf, chosen);
+                    resultOk = result.Ok;
+                    resultMessage = MacaronTouch.ResultMessage(result);
+                }
+            }
+            using(new EditorGUI.DisabledScope(MacaronTouch.Find(avatar) == null))
+            {
+                if(GUILayout.Button(ML.T("移除這個角色的觸碰凹陷")))
+                {
+                    MacaronTouch.Remove(avatar);
+                    chosen.Clear();
+                    resultOk = true;
+                    resultMessage = ML.T("已移除 MCR_Touch，並關閉材質的觸碰凹陷。");
+                }
+            }
+            if(!string.IsNullOrEmpty(resultMessage)) EditorGUILayout.HelpBox(resultMessage, resultOk ? MessageType.Info : MessageType.Error);
+            GUILayout.Space(4f);
+        }
+
+        // One mesh as a wide toggle button. Returns true when it was clicked; over is set when the pointer is on it.
+        private bool DrawRow(Renderer r, bool on, bool enabled, ref Renderer over)
+        {
+            Rect rect = GUILayoutUtility.GetRect(10f, 26f, GUILayout.ExpandWidth(true));
+            rect.xMin += 2f;
+            rect.xMax -= 2f;
+            bool hovered = rect.Contains(Event.current.mousePosition);
+            if(hovered) over = r;
+            bool shown = r.enabled && r.gameObject.activeInHierarchy;
+            bool clicked = false;
+            using(new EditorGUI.DisabledScope(!enabled))
+            {
+                Color old = GUI.backgroundColor;
+                if(on) GUI.backgroundColor = MacaronGUI.Accent;
+                clicked = GUI.Button(rect, GUIContent.none);
+                GUI.backgroundColor = old;
+            }
+            if(Event.current.type == EventType.Repaint)
+            {
+                if(hovered) EditorGUI.DrawRect(new Rect(rect.x, rect.y, 3f, rect.height), new Color(1f, 0.75f, 0.2f));
+                Rect box = new Rect(rect.x + 8f, rect.y + 5f, 16f, 16f);
+                if(enabled) EditorStyles.toggle.Draw(box, GUIContent.none, false, false, on, false);
+                Rect label = new Rect(rect.x + 30f, rect.y, rect.width - 150f, rect.height);
+                GUIStyle style = new GUIStyle(on ? EditorStyles.boldLabel : EditorStyles.label) { alignment = TextAnchor.MiddleLeft };
+                if(!shown || !enabled) style.normal.textColor = new Color(style.normal.textColor.r, style.normal.textColor.g, style.normal.textColor.b, 0.5f);
+                GUI.Label(label, r.name, style);
+                GUIStyle info = new GUIStyle(EditorStyles.miniLabel) { alignment = TextAnchor.MiddleRight };
+                string note = ML.F("{0} 頂點", MacaronTouch.RendererVertexCount(r)) + (shown ? string.Empty : " · " + ML.T("隱藏中"));
+                GUI.Label(new Rect(rect.xMax - 124f, rect.y, 118f, rect.height), note, info);
+            }
+            return clicked && enabled;
+        }
+
+        // Scene view: the hovered mesh, filled with a color that shows through whatever is in front of it.
+        private void OnSceneGUI(SceneView view)
+        {
+            if(hover == null || Event.current.type != EventType.Repaint) return;
+            if(highlight == null)
+            {
+                Shader shader = Shader.Find("Hidden/Internal-Colored");
+                if(shader == null) return;
+                highlight = new Material(shader) { hideFlags = HideFlags.HideAndDontSave };
+                highlight.SetInt("_SrcBlend", (int)UnityEngine.Rendering.BlendMode.SrcAlpha);
+                highlight.SetInt("_DstBlend", (int)UnityEngine.Rendering.BlendMode.OneMinusSrcAlpha);
+                highlight.SetInt("_Cull", (int)UnityEngine.Rendering.CullMode.Back);
+                highlight.SetInt("_ZWrite", 0);
+                highlight.SetInt("_ZTest", (int)UnityEngine.Rendering.CompareFunction.Always);
+            }
+            Mesh mesh = null;
+            Matrix4x4 matrix = hover.transform.localToWorldMatrix;
+            SkinnedMeshRenderer smr = hover as SkinnedMeshRenderer;
+            if(smr != null)
+            {
+                if(smr.sharedMesh == null) return;
+                if(baked == null) baked = new Mesh { hideFlags = HideFlags.HideAndDontSave };
+                if(bakedFor != hover)
+                {
+                    baked.Clear();
+                    smr.BakeMesh(baked, true);      // with the renderer's scale: only position and rotation are left
+                    bakedFor = hover;
+                }
+                mesh = baked;
+                matrix = Matrix4x4.TRS(smr.transform.position, smr.transform.rotation, Vector3.one);
+            }
+            else
+            {
+                MeshFilter filter = hover.GetComponent<MeshFilter>();
+                mesh = filter != null ? filter.sharedMesh : null;
+            }
+            if(mesh == null) return;
+            highlight.SetColor("_Color", new Color(1f, 0.72f, 0.15f, 0.55f));
+            highlight.SetPass(0);
+            for(int i = 0; i < mesh.subMeshCount; i++) Graphics.DrawMeshNow(mesh, matrix, i);
         }
     }
 }
