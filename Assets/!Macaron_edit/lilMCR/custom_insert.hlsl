@@ -75,6 +75,18 @@ bool Macaron_IsCameraDepthView()
     #define MCR_UZU_COMPILED 0
 #endif
 
+// Touch Dent: how far a vertex was moved goes from the vertex to the fragment stage (Macaron_TouchOS -> Macaron_TouchFS),
+// in the passes that dent and have a plain vertex-to-fragment struct (not tessellation, not the one-pass outline).
+#if MCR_UZU_COMPILED && !defined(LIL_TESSELLATION) && !defined(LIL_ONEPASS_OUTLINE) && !defined(LIL_CUSTOM_V2F_MEMBER) && !defined(LIL_CUSTOM_VERT_COPY)
+    #define MCR_TOUCH_V2F 1
+    #define LIL_CUSTOM_V2F_MEMBER(id0,id1,id2,id3,id4,id5,id6,id7) float mcrDent : TEXCOORD ## id0;
+    #define LIL_CUSTOM_VERT_COPY LIL_V2F_OUT_BASE.mcrDent = mcrVertDent;
+    #define MCR_TOUCH_DENT_IN input.mcrDent
+#else
+    #define MCR_TOUCH_V2F 0
+    #define MCR_TOUCH_DENT_IN 0.0
+#endif
+
 // Black pixel light (the lilMCR PCSS light, or any light whose color is exactly 0) in lilToon's ForwardAdd pass
 //
 // The pass would add exactly nothing, but still rasterizes and shades every pixel.
@@ -1709,9 +1721,11 @@ float MCR_UzuLandNear()
 #define MCR_TOUCH_BULGE_END 2.4
 float4x4 _VRChatContact_Transforms_lilMCRTouch[9];
 float4 _VRChatContact_Data_lilMCRTouch[9];
+static float mcrVertDent = 0.0;     // vertex stage: how far this vertex was moved, in or out (m)
 
 void Macaron_TouchOS(inout float3 normalOS, inout float4 positionOS)
 {
+    mcrVertDent = 0.0;
 #if MCR_UZU_COMPILED
     [branch]
     if(_MCR_TouchEnable < 0.5) return;
@@ -1775,6 +1789,7 @@ void Macaron_TouchOS(inout float3 normalOS, inout float4 positionOS)
 
     float depth = max(_MCR_TouchDepth, 1e-5);
     push = depth * (1.0 - exp(-push / depth));
+    mcrVertDent = max(push, rise);
     p -= n * (push - rise);
     positionOS.xyz = mul(LIL_MATRIX_I_M, float4(p, 1.0)).xyz;
 #endif
@@ -1788,9 +1803,11 @@ void Macaron_TouchOS(inout float3 normalOS, inout float4 positionOS)
 //     that falls quickly at first and runs out over 3 x Softness; and, for skin (Touch Flush), the color of pressed
 //     flesh: paler right under the finger, flushed in the ring around it.
 // Only on the side of the surface that faces the finger, as the dent itself.
-// mcrTouchFade: the camera depth texture holds the surface before the dent, so inside the pit the dented surface lies
-// behind it and Macaron's occlusion / contact shadow would take that for an occluder (a dark patch with polygon
-// edges). They are faded out there (as Uzumore does, mcrUzuFade); the shade stands in for them.
+// mcrTouchFade: the camera depth texture holds the surface before the dent, so a moved surface no longer matches it
+// and Macaron's occlusion / contact shadow react to the difference: a patch shaped like the triangles around the
+// moved vertices (a hexagon on a coarse mesh). They are faded out there (as Uzumore does, mcrUzuFade) and the shade
+// stands in for them. Where the pass carries it (MCR_TOUCH_V2F), the fade follows how far the surface really moved,
+// interpolated over those very triangles; elsewhere a radius around the finger.
 static bool mcrTouchDone = false;   // fragment stage: the values below are evaluated
 static float mcrTouchFade = 0.0;    // 0..1, how much Macaron_Apply is faded out here
 static float mcrTouchShade = 0.0;   // 0..1, shade of the pit
@@ -1875,10 +1892,14 @@ void Macaron_TouchNormalFS(inout lilFragData fd)
 #endif
 }
 
-void Macaron_TouchFS(inout lilFragData fd)
+void Macaron_TouchFS(inout lilFragData fd, float moved)
 {
 #if MCR_UZU_COMPILED && !defined(LIL_OUTLINE)
     Macaron_TouchEval(fd);
+    #if MCR_TOUCH_V2F
+        // Gone from 0.3 mm of movement on.
+        mcrTouchFade = saturate(abs(moved) / 0.0003);
+    #endif
 #endif
 }
 

@@ -127,7 +127,7 @@
 // BEFORE_FOG only exists in the forward passes (normal / lite / fur / gem), never in ShadowCaster / Meta.
 // Uzumore first: it darkens what is close to the camera and fades Macaron_Apply's occlusion out there.
 // Touch Dent: measured before Macaron_Apply (which is faded out in the pit), shaded after it.
-#define BEFORE_FOG Macaron_UzumoreFS(fd); Macaron_TouchFS(fd); Macaron_Apply(fd); Macaron_TouchShadeFS(fd);
+#define BEFORE_FOG Macaron_UzumoreFS(fd); Macaron_TouchFS(fd, MCR_TOUCH_DENT_IN); Macaron_Apply(fd); Macaron_TouchShadeFS(fd);
 
 // Occlusion on Reflections: remembers the color right before reflection / MatCap and right before emission, so the
 // part added in between (reflection, MatCap, rim light, glitter) can be occluded separately.
