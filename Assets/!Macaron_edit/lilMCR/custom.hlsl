@@ -94,6 +94,12 @@
     float _MCR_UzuSelf; \
     float _MCR_UzuMaskAmount; \
     float _MCR_UzuIsLocal; \
+    float _MCR_TouchEnable; \
+    float _MCR_TouchRadius; \
+    float _MCR_TouchLength; \
+    float _MCR_TouchSoft; \
+    float _MCR_TouchDepth; \
+    float _MCR_TouchNormal; \
     float _MCR_LocalOnly;
 
 // Textures only. Sampled with lilToon's shared sampler (lil_sampler_linear_repeat), so no sampler is added.

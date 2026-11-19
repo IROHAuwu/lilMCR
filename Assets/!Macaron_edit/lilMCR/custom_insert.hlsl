@@ -69,7 +69,8 @@ bool Macaron_IsCameraDepthView()
 #if !defined(LIL_FUR) && !defined(LIL_FAKESHADOW) && !defined(LIL_PASS_META) && !defined(LIL_PASS_MOTIONVECTORS) \
     && !defined(LIL_PASS_SHADOWCASTER) && !defined(LIL_PASS_DEPTHONLY) && !defined(LIL_PASS_DEPTHNORMALS)
     #define MCR_UZU_COMPILED 1
-    #define LIL_CUSTOM_VERTEX_OS Macaron_UzumoreOS(input.normalOS, uvMain, positionOS);
+    // Touch Dent first: Uzumore then works on the dented surface.
+    #define LIL_CUSTOM_VERTEX_OS Macaron_TouchOS(input.normalOS, positionOS); Macaron_UzumoreOS(input.normalOS, uvMain, positionOS);
 #else
     #define MCR_UZU_COMPILED 0
 #endif
@@ -1679,6 +1680,92 @@ bool MCR_UzuActive()
 float MCR_UzuLandNear()
 {
     return _ProjectionParams.y * 1.02;
+}
+
+//------------------------------------------------------------------------------------------------------------------------------
+// Touch Dent: a finger pressing on the surface pushes it in
+//
+// VRChat Material Contacts (SDK 3.10.6+): a Contact Receiver with "Write to Shaders" (built by MacaronTouch.cs, tag
+// "Finger" = the standard finger colliders every avatar has) writes, per renderer, the world transform of up to 8
+// senders in contact: _VRChatContact_Transforms_NAME[i], and their count in _VRChatContact_Data_NAME[8].y (an int
+// stored as its bits). Without a receiver (the editor outside Play mode, another platform) both arrays are 0: the
+// count is 0 and nothing moves.
+//   VRChat does not write the size of a sender. A finger is taken as a capsule along the sender's Y axis with the
+//   radius and length of the material (Touch Finger Radius / Length), times the scale of the sender.
+//
+// Each vertex near a capsule moves against its normal until it is "target" away from the capsule axis: the capsule
+// radius under the finger, widening to the untouched surface over Softness (a round pit, not a hole with a sharp rim).
+// Only when the capsule axis is in front of the surface: a surface whose normal points away from the axis is the
+// far side of a thin part, a finger that went all the way through, or (with the wearer's own fingers allowed) the
+// finger's own skin. The pit fades out as the axis reaches the surface, and its depth ends softly at Max Depth.
+//   Vertex stage of the color passes only (MCR_UZU_COMPILED, as Uzumore): shadow maps and the camera depth texture
+//   keep the undented mesh.
+#define MCR_TOUCH_MAX 8
+float4x4 _VRChatContact_Transforms_lilMCRTouch[9];
+float4 _VRChatContact_Data_lilMCRTouch[9];
+
+void Macaron_TouchOS(inout float3 normalOS, inout float4 positionOS)
+{
+#if MCR_UZU_COMPILED
+    [branch]
+    if(_MCR_TouchEnable < 0.5) return;
+    int count = min((int)asuint(_VRChatContact_Data_lilMCRTouch[8].y), MCR_TOUCH_MAX);
+    [branch]
+    if(count <= 0) return;
+
+    float3 p = mul(LIL_MATRIX_M, float4(positionOS.xyz, 1.0)).xyz;
+    float3 n = mul((float3x3)LIL_MATRIX_M, normalOS);
+    n *= rsqrt(max(dot(n, n), 1e-12));
+
+    float push = 0.0;
+    float3 tilt = 0.0;
+    [loop]
+    for(int i = 0; i < MCR_TOUCH_MAX; i++)
+    {
+        if(i >= count) break;
+        float4x4 m = _VRChatContact_Transforms_lilMCRTouch[i];
+        float3 axis = m._m01_m11_m21;
+        float scale = length(axis);
+        [branch]
+        if(scale < 1e-5) continue;
+        axis /= scale;
+        float radius = _MCR_TouchRadius * scale;
+        float soft = max(_MCR_TouchSoft * scale, 1e-4);
+        float reach = radius + soft;
+        float halfLength = max(_MCR_TouchLength * scale * 0.5 - radius, 0.0);
+
+        float3 center = m._m03_m13_m23;
+        float3 v = p - (center + axis * clamp(dot(p - center, axis), -halfLength, halfLength));
+        float d2 = dot(v, v);
+        float vn = dot(v, n);       // < 0: the capsule axis is in front of the surface
+        [branch]
+        if(d2 >= reach * reach || vn >= 0.0) continue;
+
+        float u = sqrt(d2) / reach;
+        float target = max(sqrt(d2), radius + soft * u * u);
+        // Distance along -n at which the vertex is "target" away from the axis (0 where it already is).
+        float s = vn + sqrt(max(vn * vn + target * target - d2, 0.0));
+        s *= saturate(-vn / (radius * 0.35));
+        [flatten]
+        if(s > push)
+        {
+            push = s;
+            // Toward the wall of the pit the normal leans to the finger: tangential direction away from the axis.
+            float3 t = v - n * vn;
+            tilt = t * rsqrt(max(dot(t, t), 1e-12)) * (saturate(s / (reach * 0.5)) * u);
+        }
+    }
+    [branch]
+    if(push <= 0.0) return;
+
+    float depth = max(_MCR_TouchDepth, 1e-5);
+    push = depth * (1.0 - exp(-push / depth));
+    p -= n * push;
+    positionOS.xyz = mul(LIL_MATRIX_I_M, float4(p, 1.0)).xyz;
+    float3 nDent = n - tilt * saturate(_MCR_TouchNormal);
+    nDent = mul((float3x3)LIL_MATRIX_I_M, nDent);
+    normalOS = nDent * rsqrt(max(dot(nDent, nDent), 1e-12));
+#endif
 }
 
 void Macaron_UzumoreOS(float3 normalOS, float2 uvMain, inout float4 positionOS)

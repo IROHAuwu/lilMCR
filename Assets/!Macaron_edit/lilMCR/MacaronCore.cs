@@ -329,6 +329,24 @@ namespace liltoon_MCR
             uzu.Props.Add(uzuMaskAmount);
             list.Add(uzu);
 
+            // Touch Dent (Macaron_TouchOS)
+            MacaronSection touch = new MacaronSection
+            {
+                Id = "touch", Title = "觸碰凹陷（Material Contacts）", EnableProp = "_MCR_TouchEnable",
+                Help = "別人的手指碰到表面時，表面會凹下去。需要先用選單「Macaron > Touch Dent 觸碰凹陷」在角色上建立接收器（VRChat SDK 3.10.6 以上）。只有 Play 模式和 VRChat 裡看得到。"
+            };
+            touch.Props.Add(P("_MCR_TouchRadius", "手指半徑 (m)", MacaronPropKind.Slider,
+                "VRChat 不會傳碰撞器的大小，所以手指的粗細在這裡設定。"));
+            touch.Props.Add(P("_MCR_TouchLength", "手指長度 (m)", MacaronPropKind.Slider,
+                "手指碰撞器的長度（膠囊體的全長）。0 = 當成球。"));
+            touch.Props.Add(P("_MCR_TouchSoft", "柔軟範圍 (m)", MacaronPropKind.Slider,
+                "凹陷邊緣往外延伸多遠才回到原本的表面。越大凹陷越寬、越平緩。"));
+            touch.Props.Add(P("_MCR_TouchDepth", "最大深度 (m)", MacaronPropKind.Slider,
+                "表面最多凹下去多深。手指壓得比這更深時會穿過去。"));
+            touch.Props.Add(Adv(P("_MCR_TouchNormal", "凹陷的明暗", MacaronPropKind.Slider,
+                "凹陷的斜面會改變法線，讓陰影跟著變化。0 = 只移動位置。")));
+            list.Add(touch);
+
             return list;
         }
 

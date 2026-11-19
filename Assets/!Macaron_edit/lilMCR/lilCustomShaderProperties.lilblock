@@ -79,6 +79,13 @@
         [ToggleUI] _MCR_UzuSelf ("Uzumore In Own View", Float) = 0
         [NoScaleOffset] _MCR_UzuMask ("Uzumore Mask", 2D) = "white" {}
         _MCR_UzuMaskAmount ("Uzumore Mask Amount", Range(0, 1)) = 1
+        // Touch Dent: fingers of other players press the surface in (VRChat Material Contacts, MacaronTouch.cs).
+        [ToggleUI] _MCR_TouchEnable ("Touch Dent", Float) = 0
+        _MCR_TouchRadius ("Touch Finger Radius (m)", Range(0.003, 0.03)) = 0.009
+        _MCR_TouchLength ("Touch Finger Length (m)", Range(0, 0.12)) = 0.06
+        _MCR_TouchSoft ("Touch Softness (m)", Range(0.001, 0.03)) = 0.008
+        _MCR_TouchDepth ("Touch Max Depth (m)", Range(0, 0.03)) = 0.012
+        _MCR_TouchNormal ("Touch Shading", Range(0, 1)) = 0.35
         // 1 only on the wearer's own client (IsLocal layer of the Macaron Light Adjuster, MacaronUzumore.cs).
         // Used by Uzumore ("In Own View") and Local Only. Keep the default 0.
         [HideInInspector] _MCR_UzuIsLocal ("Is Local (animated)", Float) = 0
