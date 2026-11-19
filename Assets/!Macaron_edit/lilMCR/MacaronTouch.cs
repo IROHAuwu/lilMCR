@@ -291,6 +291,42 @@ namespace liltoon_MCR
             return SelectedAvatar() != null;
         }
 
+        // A stand-in for another player's finger, to try Touch Dent in Play mode: a Contact Sender with the tag
+        // "Finger" (capsule, 0.9 cm x 6 cm, along its Y axis) and a visible capsule of the same size. Placed at the
+        // scene root, so the receivers take it as someone else's. Not part of the avatar: delete it before uploading.
+        public const string TestFingerName = "MCR Test Finger";
+
+        [MenuItem(MacaronCore.MenuRoot + "Touch Dent 触れ凹み/Create Test Finger テスト用の指を作成", false, 96)]
+        private static void MenuTestFinger()
+        {
+#if VRC_SDK_VRCSDK3
+            GameObject go = new GameObject(TestFingerName);
+            Undo.RegisterCreatedObjectUndo(go, "lilMCR Test Finger");
+            GameObject avatar = SelectedAvatar();
+            Animator animator = avatar != null ? avatar.GetComponent<Animator>() : null;
+            Transform head = animator != null && animator.isHuman ? animator.GetBoneTransform(HumanBodyBones.Head) : null;
+            if(head != null)
+            {
+                // In front of the face, pointing at it.
+                go.transform.position = head.position + avatar.transform.forward * 0.25f + avatar.transform.up * 0.03f;
+                go.transform.rotation = Quaternion.FromToRotation(Vector3.up, -avatar.transform.forward);
+            }
+            VRCContactSender sender = go.AddComponent<VRCContactSender>();
+            sender.shapeType = ContactBase.ShapeType.Capsule;
+            sender.radius = 0.009f;
+            sender.height = 0.06f;
+            sender.collisionTags = new List<string> { FingerTag };
+            GameObject visual = GameObject.CreatePrimitive(PrimitiveType.Capsule);
+            visual.name = "Visual";
+            Object.DestroyImmediate(visual.GetComponent<Collider>());
+            visual.transform.SetParent(go.transform, false);
+            visual.transform.localScale = new Vector3(0.018f, 0.03f, 0.018f);
+            Selection.activeGameObject = go;
+#else
+            EditorUtility.DisplayDialog(DialogTitle, ML.T("需要 VRChat SDK。"), "OK");
+#endif
+        }
+
         private const string SelfMenu = MacaronCore.MenuRoot + "Touch Dent 触れ凹み/Own Fingers Too 自分の指も (next Add or Update)";
 
         [MenuItem(SelfMenu, false, 95)]
