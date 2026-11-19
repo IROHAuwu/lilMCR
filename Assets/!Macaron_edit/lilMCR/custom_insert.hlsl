@@ -57,7 +57,8 @@ bool Macaron_IsCameraDepthView()
 
 // Before lilToon's outline offset: remember the real position. After it: put it back for the camera depth texture,
 // in the input too, since the shadow caster clip position is built from it.
-#define LIL_CUSTOM_VERTEX_OS mcrMeshPositionOS = positionOS;
+// Touch Dent comes first: the camera depth texture and the shadow maps hold the dented surface.
+#define LIL_CUSTOM_VERTEX_OS Macaron_TouchOS(input.normalOS, positionOS); mcrMeshPositionOS = positionOS;
 #define LIL_CUSTOM_VERTEX_WS if(Macaron_IsCameraDepthView()) { input.positionOS = mcrMeshPositionOS; vertexInput = lilGetVertexPositionInputs(mcrMeshPositionOS); }
 #endif
 
@@ -73,6 +74,18 @@ bool Macaron_IsCameraDepthView()
     #define LIL_CUSTOM_VERTEX_OS Macaron_TouchOS(input.normalOS, positionOS); Macaron_UzumoreOS(input.normalOS, uvMain, positionOS);
 #else
     #define MCR_UZU_COMPILED 0
+#endif
+
+// Touch Dent (see Macaron_TouchOS below) moves the vertices in the ShadowCaster / depth passes as well, so the camera
+// depth texture (Macaron's occlusion and contact shadow read it) and the shadow maps hold the same dented surface as
+// the color passes.
+#if !defined(LIL_FUR) && !defined(LIL_FAKESHADOW) && !defined(LIL_PASS_META) && !defined(LIL_PASS_MOTIONVECTORS)
+    #define MCR_TOUCH_COMPILED 1
+    #if !defined(LIL_CUSTOM_VERTEX_OS)
+        #define LIL_CUSTOM_VERTEX_OS Macaron_TouchOS(input.normalOS, positionOS);
+    #endif
+#else
+    #define MCR_TOUCH_COMPILED 0
 #endif
 
 // Touch Dent: how far a vertex was moved goes from the vertex to the fragment stage (Macaron_TouchOS -> Macaron_TouchFS),
@@ -1705,20 +1718,26 @@ float MCR_UzuLandNear()
 //   VRChat does not write the size of a sender. A finger is taken as a capsule along the sender's Y axis with the
 //   radius and length of the material (Touch Finger Radius / Length), times the scale of the sender.
 //
-// Each vertex near a capsule moves against its normal until it is "target" away from the capsule axis: the capsule
-// radius under the finger, widening to the untouched surface over Softness (a round pit, not a hole with a sharp rim).
+// Each vertex inside a capsule moves against its normal until it is on the capsule surface: nothing moves before the
+// finger really touches. Around a deep press on an even surface the pit also widens to the untouched surface over
+// Softness (see "press" in Macaron_TouchOS for why only there).
 // Only when the capsule axis is in front of the surface: a surface whose normal points away from the axis is the
 // far side of a thin part, a finger that went all the way through, or (with the wearer's own fingers allowed) the
 // finger's own skin. The pit fades out as the axis reaches the surface, and its depth ends softly at Max Depth.
-//   Vertex stage of the color passes only (MCR_UZU_COMPILED, as Uzumore): shadow maps and the camera depth texture
-//   keep the undented mesh.
+//   Vertex stage of the color passes and of the ShadowCaster / depth passes (MCR_TOUCH_COMPILED): the camera depth
+//   texture and the shadow maps follow the dent, so Macaron's occlusion and contact shadow keep working in the pit.
 #define MCR_TOUCH_MAX 8
-#define MCR_TOUCH_FADE_MARGIN 0.04
 // Bulge: the flesh pushed out of the pit rises in a ring around it, between these sideways distances (x reach,
 // reach = finger radius + Softness), highest at the middle value.
-#define MCR_TOUCH_BULGE_START 0.8
-#define MCR_TOUCH_BULGE_PEAK 1.3
-#define MCR_TOUCH_BULGE_END 2.4
+#define MCR_TOUCH_BULGE_START 0.7
+#define MCR_TOUCH_BULGE_PEAK 1.1
+#define MCR_TOUCH_BULGE_END 1.9
+// Contact (see Macaron_TouchOS): the roundest surface expected (radius of curvature, m) and how far the finger has to
+// be in before the surface around it follows (m). Both x the sender scale.
+#define MCR_TOUCH_CURVE 0.035
+// ... and by how much a normal may be off the real surface (tangent of the angle).
+#define MCR_TOUCH_LEAN 0.25
+#define MCR_TOUCH_SLACK 0.0005
 // Shadow of the finger: gone this far from the finger (m, x the sender scale); its edge widens by this much per
 // meter of distance.
 #define MCR_TOUCH_CAST_RANGE 0.07
@@ -1730,7 +1749,7 @@ static float mcrVertDent = 0.0;     // vertex stage: how far this vertex was mov
 void Macaron_TouchOS(inout float3 normalOS, inout float4 positionOS)
 {
     mcrVertDent = 0.0;
-#if MCR_UZU_COMPILED
+#if MCR_TOUCH_COMPILED
     [branch]
     if(_MCR_TouchEnable < 0.5) return;
     int count = min((int)asuint(_VRChatContact_Data_lilMCRTouch[8].y), MCR_TOUCH_MAX);
@@ -1767,29 +1786,42 @@ void Macaron_TouchOS(inout float3 normalOS, inout float4 positionOS)
         if(d2 >= outer * outer || vn >= 0.0) continue;
 
         float d = sqrt(d2);
+        float side2 = max(d2 - vn * vn, 0.0);       // sideways distance to the axis, squared
         // Fades the whole effect out as the axis reaches the surface (see the header).
         float front = saturate(-vn / (radius * 0.35));
-        // Nothing moves before the finger touches: press = how far the capsule is into the surface at this vertex
-        // (-vn = height of its axis above the surface plane). The soft rim of the pit grows from nothing with it.
-        float press = radius + vn;
-        float rim = soft * saturate(press / soft);
+
+        // Nothing moves before the finger really touches.
+        //   A vertex inside the capsule (d < radius) is touched for certain: it is pushed out to the capsule surface.
+        //   That alone makes the pit.
+        //   Its neighbors (the soft rim, the bulge) only know the finger through their own tangent plane, which says
+        //   little about the surface under the finger: a round part tilts away (MCR_TOUCH_CURVE), and the normals of a
+        //   face are often edited and do not follow its shape at all (MCR_TOUCH_LEAN). With both taken off, "press" is
+        //   above 0 only where the finger is in for certain: around a deep press on an even surface. Too late there,
+        //   never early anywhere.
+        float sideLength = sqrt(side2);
+        float press = radius + vn - sideLength * MCR_TOUCH_LEAN - side2 / (2.0 * MCR_TOUCH_CURVE * scale) - MCR_TOUCH_SLACK * scale;
+        float pressed = saturate(press / soft);
+        pressed = pressed * pressed * (3.0 - 2.0 * pressed);
+        float rim = soft * pressed;
         float u = d / (radius + rim);
 
         // Pit: the vertex ends "target" away from the axis: the finger radius under the finger, widening to the
-        // untouched surface over Softness. A smooth maximum instead of a hard one rounds the rim (flesh has no
+        // untouched surface over the rim. A smooth maximum instead of a hard one rounds the rim (flesh has no
         // crease there); it is let go again a little further out.
         float wall = radius + rim * min(u, 1.0) * min(u, 1.0);
         float rimRound = rim * 0.3;
         float target = 0.5 * (d + wall + sqrt((d - wall) * (d - wall) + rimRound * rimRound));
         target = lerp(target, d, smoothstep(1.15, 1.6, u));
-        // Distance along -n at which the vertex is "target" away from the axis (0 where it already is).
-        push = max(push, (vn + sqrt(max(vn * vn + target * target - d2, 0.0))) * front);
+        // Distance along -n at which the vertex is "target" away from the axis (0 where it already is). Without a
+        // rim the pit would end in a crease where the capsule leaves the surface: the last bit inside the capsule
+        // follows it only partly (skin wrapping the finger, over half of Softness at most).
+        float wrap = max(pressed, smoothstep(0.0, min(soft * 0.5, radius * 0.6), radius - d));
+        push = max(push, (vn + sqrt(max(vn * vn + target * target - d2, 0.0))) * front * wrap);
 
-        // Bulge: by how far the finger is in (0 at the first touch, 1 with its axis at the surface) and by the
-        // sideways distance to the axis.
-        float side = sqrt(max(d2 - vn * vn, 0.0)) / reach;
+        // Bulge: by how far the finger is in and by the sideways distance to the axis. Only around a real pit.
+        float side = sideLength / reach;
         float ring = smoothstep(MCR_TOUCH_BULGE_START, MCR_TOUCH_BULGE_PEAK, side) * (1.0 - smoothstep(MCR_TOUCH_BULGE_PEAK, MCR_TOUCH_BULGE_END, side));
-        rise = max(rise, _MCR_TouchBulge * scale * saturate(press / radius) * ring * front);
+        rise = max(rise, _MCR_TouchBulge * scale * saturate(press / (radius * 0.5)) * ring * front);
     }
     [branch]
     if(push <= 0.0 && rise <= 0.0) return;
@@ -1810,13 +1842,9 @@ void Macaron_TouchOS(inout float3 normalOS, inout float4 positionOS)
 //     that falls quickly at first and runs out over 3 x Softness; and, for skin (Touch Flush), the color of pressed
 //     flesh: paler right under the finger, flushed in the ring around it.
 // Only on the side of the surface that faces the finger, as the dent itself.
-// mcrTouchFade: the camera depth texture holds the surface before the dent, so a moved surface no longer matches it
-// and Macaron's occlusion / contact shadow react to the difference: a patch shaped like the triangles around the
-// moved vertices (a hexagon on a coarse mesh). They are faded out there (as Uzumore does, mcrUzuFade) and the shade
-// stands in for them. Where the pass carries it (MCR_TOUCH_V2F), the fade follows how far the surface really moved,
-// interpolated over those very triangles; elsewhere a radius around the finger.
+// The camera depth texture holds the dented surface too (MCR_TOUCH_COMPILED), so Macaron's occlusion and contact shadow
+// stay on in the pit: nothing is faded out here.
 static bool mcrTouchDone = false;   // fragment stage: the values below are evaluated
-static float mcrTouchFade = 0.0;    // 0..1, how much Macaron_Apply is faded out here
 static float mcrTouchShade = 0.0;   // 0..1, shade of the pit
 static float mcrTouchNear = 0.0;    // 0..1, closeness to the finger (1 = touching), for the flush
 static float mcrTouchCast = 0.0;    // 0..1, shadow the finger itself casts here
@@ -1835,7 +1863,6 @@ void Macaron_TouchEval(lilFragData fd)
     float3 n = dot(fd.origN, fd.origN) > 0.25 ? fd.origN : fd.N;
     n *= rsqrt(max(dot(n, n), 1e-12));
     float shade = 0.0;
-    float fade = 0.0;
     float nearest = 0.0;
     float lean = 0.0;
     float3 leanDir = 0.0;
@@ -1887,14 +1914,7 @@ void Macaron_TouchEval(lilFragData fd)
                 cast = max(cast, c * lit);
             }
         }
-        // The pit reaches radius + soft from the axis (Macaron_TouchOS), but a displaced vertex takes its whole
-        // triangles with it: on a coarse mesh the surface sinks a few centimeters further out. Macaron_Apply is faded
-        // over that margin.
-        float fadeEnd = radius + soft + MCR_TOUCH_FADE_MARGIN * scale;
-        [branch]
-        if(d >= fadeEnd) continue;
         float toward = -dot(v, n) / max(d, 1e-5);       // 1: the finger is straight above this pixel
-        fade = max(fade, (1.0 - smoothstep(radius + soft, fadeEnd, d)) * saturate(toward * 4.0));
         [branch]
         if(d >= radius + range) continue;
         float closeness = 1.0 - saturate((d - radius) / range);
@@ -1911,7 +1931,6 @@ void Macaron_TouchEval(lilFragData fd)
         }
     }
     mcrTouchShade = shade;
-    mcrTouchFade = fade;
     mcrTouchNear = nearest;
     mcrTouchCast = cast;
     mcrTouchNormal = leanDir * lean;
@@ -1943,8 +1962,6 @@ void Macaron_TouchFS(inout lilFragData fd, float moved)
 #if MCR_UZU_COMPILED && !defined(LIL_OUTLINE)
     Macaron_TouchEval(fd);
     #if MCR_TOUCH_V2F
-        // Gone from 0.3 mm of movement on.
-        mcrTouchFade = saturate(abs(moved) / 0.0003);
         mcrTouchPressed = saturate(abs(moved) / 0.0012);
     #endif
 #endif
@@ -2146,7 +2163,7 @@ void Macaron_Apply(inout lilFragData fd)
     // Everything past the far end of Fade Distance or fully masked out is skipped (MCR_FadeOut is exactly 0
     // there). The view depth of a visible fragment is SV_Position.w.
     // Uzumore (Macaron_UzumoreFS): faded out close to the camera, the depth texture there is not the pushed surface.
-    float visibility = MCR_FadeOut(fd.positionCS.w) * MCR_NearFade(fd.positionCS.w) * globalMask * amount * (1.0 - mcrUzuFade) * (1.0 - mcrTouchFade);
+    float visibility = MCR_FadeOut(fd.positionCS.w) * MCR_NearFade(fd.positionCS.w) * globalMask * amount * (1.0 - mcrUzuFade);
     bool alive = visibility > 0.0;
 #if defined(LIL_RENDER) && LIL_RENDER == 2
     // Masks have already been sampled, preserving their derivatives.
