@@ -1770,8 +1770,8 @@ void Macaron_TouchOS(inout float3 normalOS, inout float4 positionOS)
 }
 
 // Touch Dent, fragment stage: a soft shade in and around the pit, so it reads as pressed in.
-// Per pixel (smooth whatever the vertex density): darkest where the surface touches the finger, fading to nothing over
-// 1.5 x Softness around it. Only on the side of the surface that faces the finger, as the dent itself.
+// Per pixel (smooth whatever the vertex density): darkest where the surface touches the finger, then a long gradient
+// that falls quickly at first (dense at the center) and runs out over 3 x Softness around it. Only on the side of the surface that faces the finger, as the dent itself.
 // The color is not just scaled down (gray on skin): it is multiplied by a factor that follows the color itself, so a
 // colored surface gets deeper and a white one only slightly darker.
 // mcrTouchFade: the camera depth texture holds the surface before the dent, so inside the pit the dented surface lies
@@ -1806,7 +1806,7 @@ void Macaron_TouchFS(inout lilFragData fd)
         axis /= scale;
         float radius = _MCR_TouchRadius * scale;
         float soft = max(_MCR_TouchSoft * scale, 1e-4);
-        float range = soft * 1.5;
+        float range = soft * 3.0;
         float halfLength = max(_MCR_TouchLength * scale * 0.5 - radius, 0.0);
         float3 center = m._m03_m13_m23;
         float3 v = fd.positionWS - (center + axis * clamp(dot(fd.positionWS - center, axis), -halfLength, halfLength));
@@ -1822,7 +1822,8 @@ void Macaron_TouchFS(inout lilFragData fd)
         if(d >= radius + range) continue;
         float closeness = 1.0 - saturate((d - radius) / range);
         float facing = saturate(-dot(v, n) / max(d, 1e-5) * 2.0);
-        shade = max(shade, closeness * closeness * (3.0 - 2.0 * closeness) * facing);
+        // Squared: most of the darkness sits right at the finger, the rest is a faint, wide gradient.
+        shade = max(shade, closeness * closeness * facing);
     }
     mcrTouchShade = shade;
     mcrTouchFade = fade;
@@ -1835,7 +1836,7 @@ void Macaron_TouchShadeFS(inout lilFragData fd)
     float amount = mcrTouchShade * saturate(_MCR_TouchShade);
     [branch]
     if(amount <= 0.0) return;
-    fd.col.rgb = lerp(fd.col.rgb, fd.col.rgb * (0.45 + 0.3 * saturate(fd.col.rgb)), amount);
+    fd.col.rgb = lerp(fd.col.rgb, fd.col.rgb * (0.12 + 0.3 * saturate(fd.col.rgb)), amount);
 #endif
 }
 

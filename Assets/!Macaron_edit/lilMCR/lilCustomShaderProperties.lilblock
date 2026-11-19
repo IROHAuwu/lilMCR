@@ -86,7 +86,7 @@
         _MCR_TouchSoft ("Touch Softness (m)", Range(0.001, 0.03)) = 0.008
         _MCR_TouchDepth ("Touch Max Depth (m)", Range(0, 0.03)) = 0.012
         _MCR_TouchNormal ("Touch Normal Tilt", Range(0, 1)) = 0
-        _MCR_TouchShade ("Touch Shade", Range(0, 1)) = 0.5
+        _MCR_TouchShade ("Touch Shade", Range(0, 1)) = 0.75
         // 1 only on the wearer's own client (IsLocal layer of the Macaron Light Adjuster, MacaronUzumore.cs).
         // Used by Uzumore ("In Own View") and Local Only. Keep the default 0.
         [HideInInspector] _MCR_UzuIsLocal ("Is Local (animated)", Float) = 0
