@@ -1767,26 +1767,29 @@ void Macaron_TouchOS(inout float3 normalOS, inout float4 positionOS)
         if(d2 >= outer * outer || vn >= 0.0) continue;
 
         float d = sqrt(d2);
-        float u = d / reach;
         // Fades the whole effect out as the axis reaches the surface (see the header).
         float front = saturate(-vn / (radius * 0.35));
+        // Nothing moves before the finger touches: press = how far the capsule is into the surface at this vertex
+        // (-vn = height of its axis above the surface plane). The soft rim of the pit grows from nothing with it.
+        float press = radius + vn;
+        float rim = soft * saturate(press / soft);
+        float u = d / (radius + rim);
 
         // Pit: the vertex ends "target" away from the axis: the finger radius under the finger, widening to the
         // untouched surface over Softness. A smooth maximum instead of a hard one rounds the rim (flesh has no
         // crease there); it is let go again a little further out.
-        float wall = radius + soft * min(u, 1.0) * min(u, 1.0);
-        float rimRound = soft * 0.3;
+        float wall = radius + rim * min(u, 1.0) * min(u, 1.0);
+        float rimRound = rim * 0.3;
         float target = 0.5 * (d + wall + sqrt((d - wall) * (d - wall) + rimRound * rimRound));
         target = lerp(target, d, smoothstep(1.15, 1.6, u));
         // Distance along -n at which the vertex is "target" away from the axis (0 where it already is).
         push = max(push, (vn + sqrt(max(vn * vn + target * target - d2, 0.0))) * front);
 
-        // Bulge: by how far the finger is into the soft layer (0 as it arrives at reach, 1 at the surface plane) and
-        // by the sideways distance to the axis.
-        float press = saturate((reach + vn) / reach);
+        // Bulge: by how far the finger is in (0 at the first touch, 1 with its axis at the surface) and by the
+        // sideways distance to the axis.
         float side = sqrt(max(d2 - vn * vn, 0.0)) / reach;
         float ring = smoothstep(MCR_TOUCH_BULGE_START, MCR_TOUCH_BULGE_PEAK, side) * (1.0 - smoothstep(MCR_TOUCH_BULGE_PEAK, MCR_TOUCH_BULGE_END, side));
-        rise = max(rise, _MCR_TouchBulge * scale * press * ring * front);
+        rise = max(rise, _MCR_TouchBulge * scale * saturate(press / radius) * ring * front);
     }
     [branch]
     if(push <= 0.0 && rise <= 0.0) return;
@@ -1915,11 +1918,17 @@ void Macaron_TouchEval(lilFragData fd)
 #endif
 }
 
-void Macaron_TouchNormalFS(inout lilFragData fd)
+// moved: how far the surface was moved here (MCR_TOUCH_DENT_IN). The normal and the flush belong to a pressed
+// surface: they stay off around a finger that only hovers (the shade and the finger's shadow do not).
+static float mcrTouchPressed = 1.0;
+void Macaron_TouchNormalFS(inout lilFragData fd, float moved)
 {
 #if MCR_UZU_COMPILED && !defined(LIL_OUTLINE)
     Macaron_TouchEval(fd);
-    float weight = saturate(_MCR_TouchNormal);
+    #if MCR_TOUCH_V2F
+        mcrTouchPressed = saturate(abs(moved) / 0.0012);
+    #endif
+    float weight = saturate(_MCR_TouchNormal) * mcrTouchPressed;
     [branch]
     if(weight <= 0.0 || dot(mcrTouchNormal, mcrTouchNormal) <= 0.0) return;
     // mcrTouchNormal = direction x weight: adding it to the unit normal blends by that weight.
@@ -1936,6 +1945,7 @@ void Macaron_TouchFS(inout lilFragData fd, float moved)
     #if MCR_TOUCH_V2F
         // Gone from 0.3 mm of movement on.
         mcrTouchFade = saturate(abs(moved) / 0.0003);
+        mcrTouchPressed = saturate(abs(moved) / 0.0012);
     #endif
 #endif
 }
@@ -1943,7 +1953,7 @@ void Macaron_TouchFS(inout lilFragData fd, float moved)
 void Macaron_TouchShadeFS(inout lilFragData fd)
 {
 #if MCR_UZU_COMPILED && !defined(LIL_OUTLINE)
-    float flush = saturate(_MCR_TouchFlush);
+    float flush = saturate(_MCR_TouchFlush) * mcrTouchPressed;
     // Pressed flesh is pale right under the finger: the shade is held back there (Touch Flush).
     float pale = smoothstep(0.75, 1.0, mcrTouchNear) * flush;
     float amount = mcrTouchShade * saturate(_MCR_TouchShade) * (1.0 - 0.7 * pale);

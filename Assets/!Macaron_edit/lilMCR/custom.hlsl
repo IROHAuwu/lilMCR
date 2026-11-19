@@ -139,5 +139,5 @@
 // Light Adjuster (animated by the Macaron Light Adjuster menu; neutral defaults = no change).
 // BEFORE_SHADOW: right before lilToon's lighting in the normal / lite / fur forward passes (not Gem).
 // BEFORE_OUTLINE_COLOR: the outline, which uses fd.lightColor later.
-#define BEFORE_SHADOW Macaron_TouchNormalFS(fd); Macaron_Adjust(fd);
+#define BEFORE_SHADOW Macaron_TouchNormalFS(fd, MCR_TOUCH_DENT_IN); Macaron_Adjust(fd);
 #define BEFORE_OUTLINE_COLOR Macaron_AdjustLightColor(fd);
