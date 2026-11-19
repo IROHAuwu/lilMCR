@@ -343,8 +343,10 @@ namespace liltoon_MCR
                 "凹陷邊緣往外延伸多遠才回到原本的表面。越大凹陷越寬、越平緩。"));
             touch.Props.Add(P("_MCR_TouchDepth", "最大深度 (m)", MacaronPropKind.Slider,
                 "表面最多凹下去多深。手指壓得比這更深時會穿過去。"));
-            touch.Props.Add(Adv(P("_MCR_TouchNormal", "凹陷的明暗", MacaronPropKind.Slider,
-                "凹陷的斜面會改變法線，讓陰影跟著變化。0 = 只移動位置。")));
+            touch.Props.Add(P("_MCR_TouchShade", "凹陷的陰影", MacaronPropKind.Slider,
+                "凹陷處和周圍加上一層柔和的漸層陰影，看起來像被壓進去。0 = 不加。"));
+            touch.Props.Add(Adv(P("_MCR_TouchNormal", "法線傾斜", MacaronPropKind.Slider,
+                "凹陷的斜面會改變法線，讓角色本身的明暗跟著變化。太高時明暗交界會變硬。0 = 只移動位置。")));
             list.Add(touch);
 
             return list;

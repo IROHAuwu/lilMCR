@@ -1701,6 +1701,7 @@ float MCR_UzuLandNear()
 //   Vertex stage of the color passes only (MCR_UZU_COMPILED, as Uzumore): shadow maps and the camera depth texture
 //   keep the undented mesh.
 #define MCR_TOUCH_MAX 8
+#define MCR_TOUCH_FADE_MARGIN 0.04
 float4x4 _VRChatContact_Transforms_lilMCRTouch[9];
 float4 _VRChatContact_Data_lilMCRTouch[9];
 
@@ -1765,6 +1766,76 @@ void Macaron_TouchOS(inout float3 normalOS, inout float4 positionOS)
     float3 nDent = n - tilt * saturate(_MCR_TouchNormal);
     nDent = mul((float3x3)LIL_MATRIX_I_M, nDent);
     normalOS = nDent * rsqrt(max(dot(nDent, nDent), 1e-12));
+#endif
+}
+
+// Touch Dent, fragment stage: a soft shade in and around the pit, so it reads as pressed in.
+// Per pixel (smooth whatever the vertex density): darkest where the surface touches the finger, fading to nothing over
+// 1.5 x Softness around it. Only on the side of the surface that faces the finger, as the dent itself.
+// The color is not just scaled down (gray on skin): it is multiplied by a factor that follows the color itself, so a
+// colored surface gets deeper and a white one only slightly darker.
+// mcrTouchFade: the camera depth texture holds the surface before the dent, so inside the pit the dented surface lies
+// behind it and Macaron's occlusion / contact shadow would take that for an occluder (a dark patch with polygon
+// edges). They are faded out there (as Uzumore does, mcrUzuFade); the shade below stands in for them.
+static float mcrTouchFade = 0.0;    // fragment stage: 0..1, how much Macaron_Apply is faded out here
+static float mcrTouchShade = 0.0;   // fragment stage: 0..1, shade of the pit
+void Macaron_TouchFS(inout lilFragData fd)
+{
+    mcrTouchFade = 0.0;
+    mcrTouchShade = 0.0;
+#if MCR_UZU_COMPILED && !defined(LIL_OUTLINE)
+    [branch]
+    if(_MCR_TouchEnable < 0.5) return;
+    int count = min((int)asuint(_VRChatContact_Data_lilMCRTouch[8].y), MCR_TOUCH_MAX);
+    [branch]
+    if(count <= 0) return;
+
+    float3 n = dot(fd.origN, fd.origN) > 0.25 ? fd.origN : fd.N;
+    n *= rsqrt(max(dot(n, n), 1e-12));
+    float shade = 0.0;
+    float fade = 0.0;
+    [loop]
+    for(int i = 0; i < MCR_TOUCH_MAX; i++)
+    {
+        if(i >= count) break;
+        float4x4 m = _VRChatContact_Transforms_lilMCRTouch[i];
+        float3 axis = m._m01_m11_m21;
+        float scale = length(axis);
+        [branch]
+        if(scale < 1e-5) continue;
+        axis /= scale;
+        float radius = _MCR_TouchRadius * scale;
+        float soft = max(_MCR_TouchSoft * scale, 1e-4);
+        float range = soft * 1.5;
+        float halfLength = max(_MCR_TouchLength * scale * 0.5 - radius, 0.0);
+        float3 center = m._m03_m13_m23;
+        float3 v = fd.positionWS - (center + axis * clamp(dot(fd.positionWS - center, axis), -halfLength, halfLength));
+        float d = length(v);
+        // The pit reaches radius + soft from the axis (Macaron_TouchOS), but a displaced vertex takes its whole
+        // triangles with it: on a coarse mesh the surface sinks a few centimeters further out. Macaron_Apply is faded
+        // over that margin.
+        float fadeEnd = radius + soft + MCR_TOUCH_FADE_MARGIN * scale;
+        [branch]
+        if(d >= fadeEnd) continue;
+        fade = max(fade, (1.0 - smoothstep(radius + soft, fadeEnd, d)) * saturate(-dot(v, n) / max(d, 1e-5) * 4.0));
+        [branch]
+        if(d >= radius + range) continue;
+        float closeness = 1.0 - saturate((d - radius) / range);
+        float facing = saturate(-dot(v, n) / max(d, 1e-5) * 2.0);
+        shade = max(shade, closeness * closeness * (3.0 - 2.0 * closeness) * facing);
+    }
+    mcrTouchShade = shade;
+    mcrTouchFade = fade;
+#endif
+}
+
+void Macaron_TouchShadeFS(inout lilFragData fd)
+{
+#if MCR_UZU_COMPILED && !defined(LIL_OUTLINE)
+    float amount = mcrTouchShade * saturate(_MCR_TouchShade);
+    [branch]
+    if(amount <= 0.0) return;
+    fd.col.rgb = lerp(fd.col.rgb, fd.col.rgb * (0.45 + 0.3 * saturate(fd.col.rgb)), amount);
 #endif
 }
 
@@ -1939,7 +2010,7 @@ void Macaron_Apply(inout lilFragData fd)
     // Everything past the far end of Fade Distance or fully masked out is skipped (MCR_FadeOut is exactly 0
     // there). The view depth of a visible fragment is SV_Position.w.
     // Uzumore (Macaron_UzumoreFS): faded out close to the camera, the depth texture there is not the pushed surface.
-    float visibility = MCR_FadeOut(fd.positionCS.w) * MCR_NearFade(fd.positionCS.w) * globalMask * amount * (1.0 - mcrUzuFade);
+    float visibility = MCR_FadeOut(fd.positionCS.w) * MCR_NearFade(fd.positionCS.w) * globalMask * amount * (1.0 - mcrUzuFade) * (1.0 - mcrTouchFade);
     bool alive = visibility > 0.0;
 #if defined(LIL_RENDER) && LIL_RENDER == 2
     // Masks have already been sampled, preserving their derivatives.

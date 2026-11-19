@@ -100,6 +100,7 @@
     float _MCR_TouchSoft; \
     float _MCR_TouchDepth; \
     float _MCR_TouchNormal; \
+    float _MCR_TouchShade; \
     float _MCR_LocalOnly;
 
 // Textures only. Sampled with lilToon's shared sampler (lil_sampler_linear_repeat), so no sampler is added.
@@ -123,7 +124,8 @@
 // Applied right before fog, so fog is not darkened.
 // BEFORE_FOG only exists in the forward passes (normal / lite / fur / gem), never in ShadowCaster / Meta.
 // Uzumore first: it darkens what is close to the camera and fades Macaron_Apply's occlusion out there.
-#define BEFORE_FOG Macaron_UzumoreFS(fd); Macaron_Apply(fd);
+// Touch Dent: measured before Macaron_Apply (which is faded out in the pit), shaded after it.
+#define BEFORE_FOG Macaron_UzumoreFS(fd); Macaron_TouchFS(fd); Macaron_Apply(fd); Macaron_TouchShadeFS(fd);
 
 // Occlusion on Reflections: remembers the color right before reflection / MatCap and right before emission, so the
 // part added in between (reflection, MatCap, rim light, glitter) can be occluded separately.
