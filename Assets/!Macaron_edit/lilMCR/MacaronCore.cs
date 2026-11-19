@@ -342,7 +342,7 @@ namespace liltoon_MCR
             touch.Props.Add(P("_MCR_TouchSoft", "柔軟範圍 (m)", MacaronPropKind.Slider,
                 "凹陷比手指寬出多少。手指碰到表面才開始凹，壓得越深越接近這個寬度。陰影的漸層範圍也跟著它。"));
             touch.Props.Add(P("_MCR_TouchDepth", "最大深度 (m)", MacaronPropKind.Slider,
-                "表面最多凹下去多深。手指壓得比這更深時會穿過去。"));
+                "手指可以把表面推進去多深。表面會一路跟著指尖凹下去，到這個深度為止，再深手指就穿過去。臉調太深會露出嘴巴內側。"));
             touch.Props.Add(P("_MCR_TouchShade", "凹陷的陰影", MacaronPropKind.Slider,
                 "凹陷處和周圍加上一層柔和的漸層陰影，看起來像被壓進去。0 = 不加。"));
             touch.Props.Add(P("_MCR_TouchCast", "手指的影子", MacaronPropKind.Slider,

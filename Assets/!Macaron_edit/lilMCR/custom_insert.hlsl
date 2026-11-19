@@ -1721,9 +1721,9 @@ float MCR_UzuLandNear()
 // Each vertex inside a capsule moves against its normal until it is on the capsule surface: nothing moves before the
 // finger really touches. Around a deep press on an even surface the pit also widens to the untouched surface over
 // Softness (see "press" in Macaron_TouchOS for why only there).
-// Only when the capsule axis is in front of the surface: a surface whose normal points away from the axis is the
-// far side of a thin part, a finger that went all the way through, or (with the wearer's own fingers allowed) the
-// finger's own skin. The pit fades out as the axis reaches the surface, and its depth ends softly at Max Depth.
+// The pit follows the finger down to Max Depth (softly at the end). It lets go once most of the capsule is behind
+// the surface: a finger that went all the way through, the far side of a thin part, or (with the wearer's own fingers
+// allowed) the finger's own skin.
 //   Vertex stage of the color passes and of the ShadowCaster / depth passes (MCR_TOUCH_COMPILED): the camera depth
 //   texture and the shadow maps follow the dent, so Macaron's occlusion and contact shadow keep working in the pit.
 #define MCR_TOUCH_MAX 8
@@ -1746,6 +1746,34 @@ float4x4 _VRChatContact_Transforms_lilMCRTouch[9];
 float4 _VRChatContact_Data_lilMCRTouch[9];
 static float mcrVertDent = 0.0;     // vertex stage: how far this vertex was moved, in or out (m)
 
+// From a point inside a capsule (w = point - capsule center), how far along dir (unit) until it leaves the capsule.
+float MCR_TouchExit(float3 w, float3 dir, float3 axis, float halfLength, float radius)
+{
+    float dA = dot(dir, axis);
+    float wA = dot(w, axis);
+    float3 dp = dir - axis * dA;
+    float3 wp = w - axis * wA;
+    float a = dot(dp, dp);
+    // Through the side of the cylinder...
+    float t = 0.0;
+    float y = dA >= 0.0 ? halfLength * 2.0 + 1.0 : -halfLength * 2.0 - 1.0;
+    if(a > 1e-8)
+    {
+        float b = dot(wp, dp);
+        float c = dot(wp, wp) - radius * radius;
+        t = (-b + sqrt(max(b * b - a * c, 0.0))) / a;
+        y = wA + t * dA;
+    }
+    // ... or through the round end it reaches first.
+    if(abs(y) > halfLength)
+    {
+        float3 m = w - axis * (y > 0.0 ? halfLength : -halfLength);
+        float mb = dot(m, dir);
+        t = -mb + sqrt(max(mb * mb - dot(m, m) + radius * radius, 0.0));
+    }
+    return max(t, 0.0);
+}
+
 void Macaron_TouchOS(inout float3 normalOS, inout float4 positionOS)
 {
     mcrVertDent = 0.0;
@@ -1762,6 +1790,7 @@ void Macaron_TouchOS(inout float3 normalOS, inout float4 positionOS)
 
     float push = 0.0;
     float rise = 0.0;
+    float maxDepth = max(_MCR_TouchDepth, 1e-5);
     [loop]
     for(int i = 0; i < MCR_TOUCH_MAX; i++)
     {
@@ -1778,17 +1807,40 @@ void Macaron_TouchOS(inout float3 normalOS, inout float4 positionOS)
         float halfLength = max(_MCR_TouchLength * scale * 0.5 - radius, 0.0);
 
         float3 center = m._m03_m13_m23;
-        float3 v = p - (center + axis * clamp(dot(p - center, axis), -halfLength, halfLength));
+        float3 onAxis = axis * clamp(dot(p - center, axis), -halfLength, halfLength);   // nearest point of the axis, from the center
+        float3 v = p - center - onAxis;
         float d2 = dot(v, v);
         float vn = dot(v, n);       // < 0: the capsule axis is in front of the surface
         float outer = reach * MCR_TOUCH_BULGE_END;
         [branch]
-        if(d2 >= outer * outer || vn >= 0.0) continue;
+        if(d2 >= outer * outer) continue;
 
         float d = sqrt(d2);
         float side2 = max(d2 - vn * vn, 0.0);       // sideways distance to the axis, squared
-        // Fades the whole effect out as the axis reaches the surface (see the header).
+        // Rim and bulge: only with the capsule axis in front of the surface.
         float front = saturate(-vn / (radius * 0.35));
+
+        // Pit: a vertex inside the capsule is touched for certain. It moves against its normal until it is out of
+        // the capsule, the whole capsule: under a fingertip that pokes straight in, that is ahead of the tip, as
+        // deep as the finger goes (not just out of the nearest part of the shaft).
+        //   sIn / sOut: the way out of the capsule against / along the normal. Once most of the capsule is behind
+        //   the surface the finger went through, or it came from behind (the far side of a thin part, the finger's
+        //   own skin): the surface lets go.
+        [branch]
+        if(d < radius)
+        {
+            float3 w = p - center;
+            float sIn = MCR_TouchExit(w, -n, axis, halfLength, radius);
+            float sOut = MCR_TouchExit(w, n, axis, halfLength, radius);
+            push = max(push, sIn * (1.0 - smoothstep(0.6, 0.8, sIn / max(sIn + sOut, 1e-6))));
+        }
+        // The same from the axis: "deep" = how far the capsule reaches below the tangent plane of this vertex
+        // (radius + vn for a finger lying on the surface, the depth of the tip for one poking in), "hold" = 0 once
+        // the surface let go.
+        float axisIn = MCR_TouchExit(onAxis, -n, axis, halfLength, radius);
+        float axisOut = MCR_TouchExit(onAxis, n, axis, halfLength, radius);
+        float hold = 1.0 - smoothstep(0.6, 0.8, axisIn / max(axisIn + axisOut, 1e-6));
+        float deep = axisIn + vn;
 
         // Nothing moves before the finger really touches.
         //   A vertex inside the capsule (d < radius) is touched for certain: it is pushed out to the capsule surface.
@@ -1799,7 +1851,7 @@ void Macaron_TouchOS(inout float3 normalOS, inout float4 positionOS)
         //   above 0 only where the finger is in for certain: around a deep press on an even surface. Too late there,
         //   never early anywhere.
         float sideLength = sqrt(side2);
-        float press = radius + vn - sideLength * MCR_TOUCH_LEAN - side2 / (2.0 * MCR_TOUCH_CURVE * scale) - MCR_TOUCH_SLACK * scale;
+        float press = min(deep, radius * 2.0) - sideLength * MCR_TOUCH_LEAN - side2 / (2.0 * MCR_TOUCH_CURVE * scale) - MCR_TOUCH_SLACK * scale;
         float pressed = saturate(press / soft);
         pressed = pressed * pressed * (3.0 - 2.0 * pressed);
         float rim = soft * pressed;
@@ -1812,11 +1864,17 @@ void Macaron_TouchOS(inout float3 normalOS, inout float4 positionOS)
         float rimRound = rim * 0.3;
         float target = 0.5 * (d + wall + sqrt((d - wall) * (d - wall) + rimRound * rimRound));
         target = lerp(target, d, smoothstep(1.15, 1.6, u));
-        // Distance along -n at which the vertex is "target" away from the axis (0 where it already is). Without a
-        // rim the pit would end in a crease where the capsule leaves the surface: the last bit inside the capsule
-        // follows it only partly (skin wrapping the finger, over half of Softness at most).
-        float wrap = max(pressed, smoothstep(0.0, min(soft * 0.5, radius * 0.6), radius - d));
-        push = max(push, (vn + sqrt(max(vn * vn + target * target - d2, 0.0))) * front * wrap);
+        // Distance along -n at which the vertex is "target" away from the axis (0 where it already is): the skin
+        // follows the finger from the first touch on, by exactly as much as the finger is in.
+        [flatten]
+        if(target > d + 1e-6) push = max(push, (vn + sqrt(max(target * target - side2, 0.0))) * front);
+
+        // Around a deep pit (a fingertip poking in), the surface follows it down: from the depth at the edge of the
+        // finger out to nothing, wider the deeper the pit is. Without it a deep pit is a hole with straight walls.
+        float pitDepth = min(deep, maxDepth);
+        float slope = saturate((sideLength - radius) / (soft + pitDepth * 0.5));
+        [flatten]
+        if(d >= radius) push = max(push, max(pitDepth - radius, 0.0) * (1.0 - slope) * (1.0 - slope) * pressed * hold);
 
         // Bulge: by how far the finger is in and by the sideways distance to the axis. Only around a real pit.
         float side = sideLength / reach;
@@ -1826,8 +1884,9 @@ void Macaron_TouchOS(inout float3 normalOS, inout float4 positionOS)
     [branch]
     if(push <= 0.0 && rise <= 0.0) return;
 
-    float depth = max(_MCR_TouchDepth, 1e-5);
-    push = depth * (1.0 - exp(-push / depth));
+    // As deep as the finger for most of Max Depth, then it runs out softly.
+    float firm = maxDepth * 0.75;
+    push = push <= firm ? push : firm + (maxDepth - firm) * (1.0 - exp(-(push - firm) / (maxDepth - firm)));
     mcrVertDent = max(push, rise);
     p -= n * (push - rise);
     positionOS.xyz = mul(LIL_MATRIX_I_M, float4(p, 1.0)).xyz;

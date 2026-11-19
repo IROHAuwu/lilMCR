@@ -84,7 +84,7 @@
         _MCR_TouchRadius ("Touch Finger Radius (m)", Range(0.003, 0.03)) = 0.009
         _MCR_TouchLength ("Touch Finger Length (m)", Range(0, 0.12)) = 0.06
         _MCR_TouchSoft ("Touch Softness (m)", Range(0.001, 0.03)) = 0.008
-        _MCR_TouchDepth ("Touch Max Depth (m)", Range(0, 0.03)) = 0.012
+        _MCR_TouchDepth ("Touch Max Depth (m)", Range(0, 0.15)) = 0.025
         _MCR_TouchNormal ("Touch Normal", Range(0, 1)) = 0.5
         _MCR_TouchBulge ("Touch Bulge (m)", Range(0, 0.01)) = 0.003
         _MCR_TouchFlush ("Touch Flush (skin)", Range(0, 1)) = 0
