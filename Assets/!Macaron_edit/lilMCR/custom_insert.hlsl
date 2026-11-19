@@ -1702,6 +1702,11 @@ float MCR_UzuLandNear()
 //   keep the undented mesh.
 #define MCR_TOUCH_MAX 8
 #define MCR_TOUCH_FADE_MARGIN 0.04
+// Bulge: the flesh pushed out of the pit rises in a ring around it, between these sideways distances (x reach,
+// reach = finger radius + Softness), highest at the middle value.
+#define MCR_TOUCH_BULGE_START 0.8
+#define MCR_TOUCH_BULGE_PEAK 1.3
+#define MCR_TOUCH_BULGE_END 2.4
 float4x4 _VRChatContact_Transforms_lilMCRTouch[9];
 float4 _VRChatContact_Data_lilMCRTouch[9];
 
@@ -1719,7 +1724,7 @@ void Macaron_TouchOS(inout float3 normalOS, inout float4 positionOS)
     n *= rsqrt(max(dot(n, n), 1e-12));
 
     float push = 0.0;
-    float3 tilt = 0.0;
+    float rise = 0.0;
     [loop]
     for(int i = 0; i < MCR_TOUCH_MAX; i++)
     {
@@ -1739,50 +1744,63 @@ void Macaron_TouchOS(inout float3 normalOS, inout float4 positionOS)
         float3 v = p - (center + axis * clamp(dot(p - center, axis), -halfLength, halfLength));
         float d2 = dot(v, v);
         float vn = dot(v, n);       // < 0: the capsule axis is in front of the surface
+        float outer = reach * MCR_TOUCH_BULGE_END;
         [branch]
-        if(d2 >= reach * reach || vn >= 0.0) continue;
+        if(d2 >= outer * outer || vn >= 0.0) continue;
 
-        float u = sqrt(d2) / reach;
-        float target = max(sqrt(d2), radius + soft * u * u);
+        float d = sqrt(d2);
+        float u = d / reach;
+        // Fades the whole effect out as the axis reaches the surface (see the header).
+        float front = saturate(-vn / (radius * 0.35));
+
+        // Pit: the vertex ends "target" away from the axis: the finger radius under the finger, widening to the
+        // untouched surface over Softness. A smooth maximum instead of a hard one rounds the rim (flesh has no
+        // crease there); it is let go again a little further out.
+        float wall = radius + soft * min(u, 1.0) * min(u, 1.0);
+        float rimRound = soft * 0.3;
+        float target = 0.5 * (d + wall + sqrt((d - wall) * (d - wall) + rimRound * rimRound));
+        target = lerp(target, d, smoothstep(1.15, 1.6, u));
         // Distance along -n at which the vertex is "target" away from the axis (0 where it already is).
-        float s = vn + sqrt(max(vn * vn + target * target - d2, 0.0));
-        s *= saturate(-vn / (radius * 0.35));
-        [flatten]
-        if(s > push)
-        {
-            push = s;
-            // Toward the wall of the pit the normal leans to the finger: tangential direction away from the axis.
-            float3 t = v - n * vn;
-            tilt = t * rsqrt(max(dot(t, t), 1e-12)) * (saturate(s / (reach * 0.5)) * u);
-        }
+        push = max(push, (vn + sqrt(max(vn * vn + target * target - d2, 0.0))) * front);
+
+        // Bulge: by how far the finger is into the soft layer (0 as it arrives at reach, 1 at the surface plane) and
+        // by the sideways distance to the axis.
+        float press = saturate((reach + vn) / reach);
+        float side = sqrt(max(d2 - vn * vn, 0.0)) / reach;
+        float ring = smoothstep(MCR_TOUCH_BULGE_START, MCR_TOUCH_BULGE_PEAK, side) * (1.0 - smoothstep(MCR_TOUCH_BULGE_PEAK, MCR_TOUCH_BULGE_END, side));
+        rise = max(rise, _MCR_TouchBulge * scale * press * ring * front);
     }
     [branch]
-    if(push <= 0.0) return;
+    if(push <= 0.0 && rise <= 0.0) return;
 
     float depth = max(_MCR_TouchDepth, 1e-5);
     push = depth * (1.0 - exp(-push / depth));
-    p -= n * push;
+    p -= n * (push - rise);
     positionOS.xyz = mul(LIL_MATRIX_I_M, float4(p, 1.0)).xyz;
-    float3 nDent = n - tilt * saturate(_MCR_TouchNormal);
-    nDent = mul((float3x3)LIL_MATRIX_I_M, nDent);
-    normalOS = nDent * rsqrt(max(dot(nDent, nDent), 1e-12));
 #endif
 }
 
-// Touch Dent, fragment stage: a soft shade in and around the pit, so it reads as pressed in.
-// Per pixel (smooth whatever the vertex density): darkest where the surface touches the finger, then a long gradient
-// that falls quickly at first (dense at the center) and runs out over 3 x Softness around it. Only on the side of the surface that faces the finger, as the dent itself.
-// The color is not just scaled down (gray on skin): see Macaron_TouchShadeFS.
+// Touch Dent, fragment stage. Per pixel (smooth whatever the vertex density), evaluated once and used at two points:
+//   - before lilToon's lighting (Macaron_TouchNormalFS): the normal follows the pit. On the capsule the surface faces
+//     the axis; that direction is blended in from the finger out to the rim (Touch Normal), so the lighting, the toon
+//     shadow and the highlights bend into the pit;
+//   - before fog (Macaron_TouchShadeFS): the shade, darkest where the surface touches the finger, then a long gradient
+//     that falls quickly at first and runs out over 3 x Softness; and, for skin (Touch Flush), the color of pressed
+//     flesh: paler right under the finger, flushed in the ring around it.
+// Only on the side of the surface that faces the finger, as the dent itself.
 // mcrTouchFade: the camera depth texture holds the surface before the dent, so inside the pit the dented surface lies
 // behind it and Macaron's occlusion / contact shadow would take that for an occluder (a dark patch with polygon
-// edges). They are faded out there (as Uzumore does, mcrUzuFade); the shade below stands in for them.
-static float mcrTouchFade = 0.0;    // fragment stage: 0..1, how much Macaron_Apply is faded out here
-static float mcrTouchShade = 0.0;   // fragment stage: 0..1, shade of the pit
-void Macaron_TouchFS(inout lilFragData fd)
+// edges). They are faded out there (as Uzumore does, mcrUzuFade); the shade stands in for them.
+static bool mcrTouchDone = false;   // fragment stage: the values below are evaluated
+static float mcrTouchFade = 0.0;    // 0..1, how much Macaron_Apply is faded out here
+static float mcrTouchShade = 0.0;   // 0..1, shade of the pit
+static float mcrTouchNear = 0.0;    // 0..1, closeness to the finger (1 = touching), for the flush
+static float3 mcrTouchNormal = 0.0; // direction the normal leans to, times its weight (0 = unchanged)
+void Macaron_TouchEval(lilFragData fd)
 {
-    mcrTouchFade = 0.0;
-    mcrTouchShade = 0.0;
 #if MCR_UZU_COMPILED && !defined(LIL_OUTLINE)
+    if(mcrTouchDone) return;
+    mcrTouchDone = true;
     [branch]
     if(_MCR_TouchEnable < 0.5) return;
     int count = min((int)asuint(_VRChatContact_Data_lilMCRTouch[8].y), MCR_TOUCH_MAX);
@@ -1793,6 +1811,9 @@ void Macaron_TouchFS(inout lilFragData fd)
     n *= rsqrt(max(dot(n, n), 1e-12));
     float shade = 0.0;
     float fade = 0.0;
+    float nearest = 0.0;
+    float lean = 0.0;
+    float3 leanDir = 0.0;
     [loop]
     for(int i = 0; i < MCR_TOUCH_MAX; i++)
     {
@@ -1816,25 +1837,60 @@ void Macaron_TouchFS(inout lilFragData fd)
         float fadeEnd = radius + soft + MCR_TOUCH_FADE_MARGIN * scale;
         [branch]
         if(d >= fadeEnd) continue;
-        fade = max(fade, (1.0 - smoothstep(radius + soft, fadeEnd, d)) * saturate(-dot(v, n) / max(d, 1e-5) * 4.0));
+        float toward = -dot(v, n) / max(d, 1e-5);       // 1: the finger is straight above this pixel
+        fade = max(fade, (1.0 - smoothstep(radius + soft, fadeEnd, d)) * saturate(toward * 4.0));
         [branch]
         if(d >= radius + range) continue;
         float closeness = 1.0 - saturate((d - radius) / range);
-        float facing = saturate(-dot(v, n) / max(d, 1e-5) * 2.0);
+        float facing = saturate(toward * 2.0);
         // Squared: most of the darkness sits right at the finger, the rest is a faint, wide gradient.
         shade = max(shade, closeness * closeness * facing);
+        nearest = max(nearest, closeness * facing);
+        float w = (1.0 - smoothstep(radius, radius + soft * 1.5, d)) * facing;
+        [flatten]
+        if(w > lean)
+        {
+            lean = w;
+            leanDir = -v / max(d, 1e-5);
+        }
     }
     mcrTouchShade = shade;
     mcrTouchFade = fade;
+    mcrTouchNear = nearest;
+    mcrTouchNormal = leanDir * lean;
+#endif
+}
+
+void Macaron_TouchNormalFS(inout lilFragData fd)
+{
+#if MCR_UZU_COMPILED && !defined(LIL_OUTLINE)
+    Macaron_TouchEval(fd);
+    float weight = saturate(_MCR_TouchNormal);
+    [branch]
+    if(weight <= 0.0 || dot(mcrTouchNormal, mcrTouchNormal) <= 0.0) return;
+    // mcrTouchNormal = direction x weight: adding it to the unit normal blends by that weight.
+    float lean = length(mcrTouchNormal);
+    float3 leaned = lerp(fd.N, mcrTouchNormal / lean, lean * weight);
+    fd.N = leaned * rsqrt(max(dot(leaned, leaned), 1e-12));
+#endif
+}
+
+void Macaron_TouchFS(inout lilFragData fd)
+{
+#if MCR_UZU_COMPILED && !defined(LIL_OUTLINE)
+    Macaron_TouchEval(fd);
 #endif
 }
 
 void Macaron_TouchShadeFS(inout lilFragData fd)
 {
 #if MCR_UZU_COMPILED && !defined(LIL_OUTLINE)
-    float amount = mcrTouchShade * saturate(_MCR_TouchShade);
+    float flush = saturate(_MCR_TouchFlush);
+    // Pressed flesh is pale right under the finger: the shade is held back there (Touch Flush).
+    float pale = smoothstep(0.75, 1.0, mcrTouchNear) * flush;
+    float amount = mcrTouchShade * saturate(_MCR_TouchShade) * (1.0 - 0.7 * pale);
     [branch]
-    if(amount <= 0.0) return;
+    if(amount <= 0.0 && flush <= 0.0) return;
     // Shade color = the base color of the surface, deepened: the hue of the albedo (scaled to full brightness) cubed
     // and darkened. Skin goes to a deeper skin tone, colored cloth to a deeper shade of itself, white only darker.
     float3 baseColor = saturate(fd.albedo);
@@ -1842,6 +1898,10 @@ void Macaron_TouchShadeFS(inout lilFragData fd)
     float3 hue = peak > 1e-3 ? baseColor / peak : 1.0;
     float3 deep = hue * hue * hue * 0.62;
     fd.col.rgb = lerp(fd.col.rgb, fd.col.rgb * deep, amount);
+    // ... and flushed in the ring around it: blood pushed aside. Strongest a little away from the finger.
+    float ring = mcrTouchNear * (1.0 - pale) * smoothstep(0.0, 0.5, mcrTouchNear) * flush;
+    fd.col.rgb = lerp(fd.col.rgb, fd.col.rgb * float3(1.0, 0.72, 0.74), ring * 0.6);
+    fd.col.rgb = lerp(fd.col.rgb, fd.col.rgb * 0.5 + 0.5 * saturate(fd.col.rgb + 0.12), pale * 0.5);
 #endif
 }
 

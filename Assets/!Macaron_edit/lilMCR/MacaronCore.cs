@@ -345,8 +345,12 @@ namespace liltoon_MCR
                 "表面最多凹下去多深。手指壓得比這更深時會穿過去。"));
             touch.Props.Add(P("_MCR_TouchShade", "凹陷的陰影", MacaronPropKind.Slider,
                 "凹陷處和周圍加上一層柔和的漸層陰影，看起來像被壓進去。0 = 不加。"));
-            touch.Props.Add(Adv(P("_MCR_TouchNormal", "法線傾斜", MacaronPropKind.Slider,
-                "凹陷的斜面會改變法線，讓角色本身的明暗跟著變化。太高時明暗交界會變硬。0 = 只移動位置。")));
+            touch.Props.Add(P("_MCR_TouchBulge", "周圍隆起 (m)", MacaronPropKind.Slider,
+                "被壓下去的肉往旁邊擠，在凹陷外圍鼓起一圈的高度。壓得越深鼓得越高。0 = 不隆起。"));
+            touch.Props.Add(P("_MCR_TouchNormal", "凹陷的光影", MacaronPropKind.Slider,
+                "凹陷的斜面逐像素改變法線，讓角色本身的明暗和高光順著凹陷變化。0 = 不改變法線。"));
+            touch.Props.Add(P("_MCR_TouchFlush", "壓迫的膚色（皮膚用）", MacaronPropKind.Slider,
+                "皮膚被壓時，手指正下方泛白、周圍一圈偏紅。只建議開在皮膚的材質上，衣服維持 0。"));
             list.Add(touch);
 
             return list;

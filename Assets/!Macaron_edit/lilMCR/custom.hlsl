@@ -101,6 +101,8 @@
     float _MCR_TouchDepth; \
     float _MCR_TouchNormal; \
     float _MCR_TouchShade; \
+    float _MCR_TouchBulge; \
+    float _MCR_TouchFlush; \
     float _MCR_LocalOnly;
 
 // Textures only. Sampled with lilToon's shared sampler (lil_sampler_linear_repeat), so no sampler is added.
@@ -136,5 +138,5 @@
 // Light Adjuster (animated by the Macaron Light Adjuster menu; neutral defaults = no change).
 // BEFORE_SHADOW: right before lilToon's lighting in the normal / lite / fur forward passes (not Gem).
 // BEFORE_OUTLINE_COLOR: the outline, which uses fd.lightColor later.
-#define BEFORE_SHADOW Macaron_Adjust(fd);
+#define BEFORE_SHADOW Macaron_TouchNormalFS(fd); Macaron_Adjust(fd);
 #define BEFORE_OUTLINE_COLOR Macaron_AdjustLightColor(fd);
