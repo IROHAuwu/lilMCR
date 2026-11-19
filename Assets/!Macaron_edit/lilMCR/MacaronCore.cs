@@ -340,11 +340,11 @@ namespace liltoon_MCR
             touch.Props.Add(P("_MCR_TouchLength", "手指長度 (m)", MacaronPropKind.Slider,
                 "手指碰撞器的長度（膠囊體的全長）。0 = 當成球。"));
             touch.Props.Add(P("_MCR_TouchSoft", "柔軟範圍 (m)", MacaronPropKind.Slider,
-                "凹陷邊緣往外延伸多遠才回到原本的表面。越大凹陷越寬、越平緩。"));
+                "凹陷比手指寬出多少。壓得越深越接近這個寬度；剛碰到時從 0 開始。"));
             touch.Props.Add(P("_MCR_TouchDepth", "最大深度 (m)", MacaronPropKind.Slider,
                 "表面最多凹下去多深。手指壓得比這更深時會穿過去。"));
             touch.Props.Add(P("_MCR_TouchShade", "凹陷的陰影", MacaronPropKind.Slider,
-                "凹陷處和周圍加上一層柔和的漸層陰影，看起來像被壓進去。0 = 不加。"));
+                "壓下去的地方依凹陷深度加上陰影：越深越濃，往凹陷邊緣漸漸變淡。手指只是靠近、還沒壓到時不會有陰影。0 = 不加。"));
             touch.Props.Add(Adv(P("_MCR_TouchNormal", "法線傾斜", MacaronPropKind.Slider,
                 "凹陷的斜面會改變法線，讓角色本身的明暗跟著變化。太高時明暗交界會變硬。0 = 只移動位置。")));
             list.Add(touch);

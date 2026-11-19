@@ -75,6 +75,18 @@ bool Macaron_IsCameraDepthView()
     #define MCR_UZU_COMPILED 0
 #endif
 
+// Touch Dent: depth of the pit from the vertex to the fragment stage (Macaron_TouchOS -> Macaron_TouchFS), in the
+// passes that dent and have a plain vertex-to-fragment struct (not tessellation, not the one-pass outline).
+#if MCR_UZU_COMPILED && !defined(LIL_TESSELLATION) && !defined(LIL_ONEPASS_OUTLINE) && !defined(LIL_CUSTOM_V2F_MEMBER) && !defined(LIL_CUSTOM_VERT_COPY)
+    #define MCR_TOUCH_V2F 1
+    #define LIL_CUSTOM_V2F_MEMBER(id0,id1,id2,id3,id4,id5,id6,id7) float mcrDent : TEXCOORD ## id0;
+    #define LIL_CUSTOM_VERT_COPY LIL_V2F_OUT_BASE.mcrDent = mcrVertDent;
+    #define MCR_TOUCH_DENT_IN input.mcrDent
+#else
+    #define MCR_TOUCH_V2F 0
+    #define MCR_TOUCH_DENT_IN 0.0
+#endif
+
 // Black pixel light (the lilMCR PCSS light, or any light whose color is exactly 0) in lilToon's ForwardAdd pass
 //
 // The pass would add exactly nothing, but still rasterizes and shades every pixel.
@@ -1693,20 +1705,33 @@ float MCR_UzuLandNear()
 //   VRChat does not write the size of a sender. A finger is taken as a capsule along the sender's Y axis with the
 //   radius and length of the material (Touch Finger Radius / Length), times the scale of the sender.
 //
-// Each vertex near a capsule moves against its normal until it is "target" away from the capsule axis: the capsule
-// radius under the finger, widening to the untouched surface over Softness (a round pit, not a hole with a sharp rim).
-// Only when the capsule axis is in front of the surface: a surface whose normal points away from the axis is the
-// far side of a thin part, a finger that went all the way through, or (with the wearer's own fingers allowed) the
-// finger's own skin. The pit fades out as the axis reaches the surface, and its depth ends softly at Max Depth.
+// Nothing happens while the finger only comes near: the surface gives way once the capsule crosses it. Seen from a
+// vertex, with h = height of the capsule axis above the surface (along the normal) and the sideways distance to it:
+//   press = radius - h          how far the capsule is pushed into the surface here (<= 0: not touching)
+//   the pit is the cap of a sphere of radius (radius + rim) around the axis, lowered by rim, so that it is exactly
+//   press deep under the finger and wider than the finger by a soft rim. rim grows from 0 to Softness with the
+//   press, so the first contact starts from nothing.
+// Only when the axis is in front of the surface: a surface whose normal points away from it is the far side of a thin
+// part, a finger that went all the way through, or (with the wearer's own fingers allowed) the finger's own skin. The
+// pit fades out as the axis reaches the surface, and its depth ends softly at Max Depth.
 //   Vertex stage of the color passes only (MCR_UZU_COMPILED, as Uzumore): shadow maps and the camera depth texture
 //   keep the undented mesh.
+//
+// The depth of the pit goes to the fragment stage (mcrDent, where the pass has room for it, MCR_TOUCH_V2F):
+//   - Touch Shade darkens the pit by its depth: nothing around a finger that only hovers, darkest under the finger,
+//     fading with the slope of the pit;
+//   - Macaron_Apply is faded out where the surface moved: the depth texture still holds it where it was, which the
+//     occlusion / contact shadow would take for an occluder in front (a dark patch with polygon edges).
 #define MCR_TOUCH_MAX 8
-#define MCR_TOUCH_FADE_MARGIN 0.04
 float4x4 _VRChatContact_Transforms_lilMCRTouch[9];
 float4 _VRChatContact_Data_lilMCRTouch[9];
+static float mcrVertDent = 0.0;     // vertex stage: how far this vertex was pushed in (m)
+static float mcrTouchFade = 0.0;    // fragment stage: 0..1, how much Macaron_Apply is faded out here
+static float mcrTouchShade = 0.0;   // fragment stage: 0..1, shade of the pit
 
 void Macaron_TouchOS(inout float3 normalOS, inout float4 positionOS)
 {
+    mcrVertDent = 0.0;
 #if MCR_UZU_COMPILED
     [branch]
     if(_MCR_TouchEnable < 0.5) return;
@@ -1732,28 +1757,31 @@ void Macaron_TouchOS(inout float3 normalOS, inout float4 positionOS)
         axis /= scale;
         float radius = _MCR_TouchRadius * scale;
         float soft = max(_MCR_TouchSoft * scale, 1e-4);
-        float reach = radius + soft;
         float halfLength = max(_MCR_TouchLength * scale * 0.5 - radius, 0.0);
 
         float3 center = m._m03_m13_m23;
         float3 v = p - (center + axis * clamp(dot(p - center, axis), -halfLength, halfLength));
-        float d2 = dot(v, v);
-        float vn = dot(v, n);       // < 0: the capsule axis is in front of the surface
+        float h = -dot(v, n);           // > 0: the capsule axis is in front of the surface
+        float press = radius - h;
         [branch]
-        if(d2 >= reach * reach || vn >= 0.0) continue;
+        if(h <= 0.0 || press <= 0.0) continue;
 
-        float u = sqrt(d2) / reach;
-        float target = max(sqrt(d2), radius + soft * u * u);
-        // Distance along -n at which the vertex is "target" away from the axis (0 where it already is).
-        float s = vn + sqrt(max(vn * vn + target * target - d2, 0.0));
-        s *= saturate(-vn / (radius * 0.35));
+        float rim = soft * saturate(press / soft);
+        float side2 = max(dot(v, v) - h * h, 0.0);
+        float cap = radius + rim;
+        float x = sqrt(max(cap * cap - side2, 0.0)) - h - rim;
+        [branch]
+        if(x <= 0.0) continue;
+        // Rounded where the pit meets the untouched surface (x*x/(x+e) leaves at most e = 0.15 Softness under the finger).
+        float s = x * x / (x + soft * 0.15);
+        s *= saturate(h / (radius * 0.35));
         [flatten]
         if(s > push)
         {
             push = s;
             // Toward the wall of the pit the normal leans to the finger: tangential direction away from the axis.
-            float3 t = v - n * vn;
-            tilt = t * rsqrt(max(dot(t, t), 1e-12)) * (saturate(s / (reach * 0.5)) * u);
+            float3 t = v + n * h;
+            tilt = t * rsqrt(max(dot(t, t), 1e-12)) * (saturate(s / (cap * 0.5)) * saturate(sqrt(side2) / cap));
         }
     }
     [branch]
@@ -1761,6 +1789,7 @@ void Macaron_TouchOS(inout float3 normalOS, inout float4 positionOS)
 
     float depth = max(_MCR_TouchDepth, 1e-5);
     push = depth * (1.0 - exp(-push / depth));
+    mcrVertDent = push;
     p -= n * push;
     positionOS.xyz = mul(LIL_MATRIX_I_M, float4(p, 1.0)).xyz;
     float3 nDent = n - tilt * saturate(_MCR_TouchNormal);
@@ -1769,67 +1798,23 @@ void Macaron_TouchOS(inout float3 normalOS, inout float4 positionOS)
 #endif
 }
 
-// Touch Dent, fragment stage: a soft shade in and around the pit, so it reads as pressed in.
-// Per pixel (smooth whatever the vertex density): darkest where the surface touches the finger, then a long gradient
-// that falls quickly at first (dense at the center) and runs out over 3 x Softness around it. Only on the side of the surface that faces the finger, as the dent itself.
-// The color is not just scaled down (gray on skin): it is multiplied by a factor that follows the color itself, so a
-// colored surface gets deeper and a white one only slightly darker.
-// mcrTouchFade: the camera depth texture holds the surface before the dent, so inside the pit the dented surface lies
-// behind it and Macaron's occlusion / contact shadow would take that for an occluder (a dark patch with polygon
-// edges). They are faded out there (as Uzumore does, mcrUzuFade); the shade below stands in for them.
-static float mcrTouchFade = 0.0;    // fragment stage: 0..1, how much Macaron_Apply is faded out here
-static float mcrTouchShade = 0.0;   // fragment stage: 0..1, shade of the pit
-void Macaron_TouchFS(inout lilFragData fd)
+// Fragment stage, before Macaron_Apply. dent: interpolated depth of the pit at this pixel (m).
+void Macaron_TouchFS(float dent)
 {
     mcrTouchFade = 0.0;
     mcrTouchShade = 0.0;
 #if MCR_UZU_COMPILED && !defined(LIL_OUTLINE)
     [branch]
-    if(_MCR_TouchEnable < 0.5) return;
-    int count = min((int)asuint(_VRChatContact_Data_lilMCRTouch[8].y), MCR_TOUCH_MAX);
-    [branch]
-    if(count <= 0) return;
-
-    float3 n = dot(fd.origN, fd.origN) > 0.25 ? fd.origN : fd.N;
-    n *= rsqrt(max(dot(n, n), 1e-12));
-    float shade = 0.0;
-    float fade = 0.0;
-    [loop]
-    for(int i = 0; i < MCR_TOUCH_MAX; i++)
-    {
-        if(i >= count) break;
-        float4x4 m = _VRChatContact_Transforms_lilMCRTouch[i];
-        float3 axis = m._m01_m11_m21;
-        float scale = length(axis);
-        [branch]
-        if(scale < 1e-5) continue;
-        axis /= scale;
-        float radius = _MCR_TouchRadius * scale;
-        float soft = max(_MCR_TouchSoft * scale, 1e-4);
-        float range = soft * 3.0;
-        float halfLength = max(_MCR_TouchLength * scale * 0.5 - radius, 0.0);
-        float3 center = m._m03_m13_m23;
-        float3 v = fd.positionWS - (center + axis * clamp(dot(fd.positionWS - center, axis), -halfLength, halfLength));
-        float d = length(v);
-        // The pit reaches radius + soft from the axis (Macaron_TouchOS), but a displaced vertex takes its whole
-        // triangles with it: on a coarse mesh the surface sinks a few centimeters further out. Macaron_Apply is faded
-        // over that margin.
-        float fadeEnd = radius + soft + MCR_TOUCH_FADE_MARGIN * scale;
-        [branch]
-        if(d >= fadeEnd) continue;
-        fade = max(fade, (1.0 - smoothstep(radius + soft, fadeEnd, d)) * saturate(-dot(v, n) / max(d, 1e-5) * 4.0));
-        [branch]
-        if(d >= radius + range) continue;
-        float closeness = 1.0 - saturate((d - radius) / range);
-        float facing = saturate(-dot(v, n) / max(d, 1e-5) * 2.0);
-        // Squared: most of the darkness sits right at the finger, the rest is a faint, wide gradient.
-        shade = max(shade, closeness * closeness * facing);
-    }
-    mcrTouchShade = shade;
-    mcrTouchFade = fade;
+    if(dent <= 0.0) return;
+    mcrTouchFade = saturate(dent / 0.0008);
+    // Full shade at half of Max Depth; rises quickly, so a light press already shows.
+    float t = saturate(dent / max(_MCR_TouchDepth * 0.5, 1e-5));
+    mcrTouchShade = t * (2.0 - t);
 #endif
 }
 
+// After Macaron_Apply. The color is not just scaled down (gray on skin): it is multiplied by a factor that follows the
+// color itself, so a colored surface gets deeper and a white one only darker.
 void Macaron_TouchShadeFS(inout lilFragData fd)
 {
 #if MCR_UZU_COMPILED && !defined(LIL_OUTLINE)
