@@ -212,8 +212,10 @@ namespace liltoon_MCR
             var renderer=projection == null ? null : projection.GetComponent<Renderer>();
             if(renderer == null || renderer.sharedMaterial == null) throw new InvalidOperationException(ML.T("角色尚未建立世界落影，請使用建立 / 更新。"));
             string path=AssetDatabase.GetAssetPath(renderer.sharedMaterial);
-            string folder=string.IsNullOrEmpty(path) ? MacaronCore.ConvertedFolder+"/"+MacaronCore.SafeFileName(avatar.name) : System.IO.Path.GetDirectoryName(path).Replace('\\','/');
-            MacaronCore.EnsureFolder(folder);
+            // The projection material sits in its "WorldShadow N" folder: the avatar's folder is the one above it.
+            string folder=string.IsNullOrEmpty(path) ? MacaronCore.ConvertedFolder+"/"+MacaronCore.SafeFileName(avatar.name) : System.IO.Path.GetDirectoryName(System.IO.Path.GetDirectoryName(path)).Replace('\\','/');
+            if(string.IsNullOrEmpty(folder) || !folder.StartsWith("Assets", StringComparison.Ordinal)) folder=MacaronCore.ConvertedFolder+"/"+MacaronCore.SafeFileName(avatar.name);
+            folder=MacaronWorldShadowReceivers.MaterialFolder(folder);
             Undo.IncrementCurrentGroup(); int group=Undo.GetCurrentGroup(); Undo.SetCurrentGroupName("Macaron Repair World Shadow");
             MacaronDepthSource.Ensure(avatar);
             string result=MacaronWorldShadowReceivers.Apply(avatar,folder);
@@ -324,7 +326,9 @@ namespace liltoon_MCR
             AssetDatabase.CreateAsset(mesh, assets + "/Volume.asset");
             Undo.IncrementCurrentGroup(); int group = Undo.GetCurrentGroup(); Undo.SetCurrentGroupName("Macaron World Shadow");
             MacaronDepthSource.Ensure(avatar);
-            string receivers = MacaronWorldShadowReceivers.Apply(avatar, assets, new Vector4(extent, near, far, captureKey));
+            // The avatar's receiver materials live in one fixed folder next to the per-generation ones: an old
+            // "WorldShadow N" folder then holds nothing the avatar still uses and can be deleted safely.
+            string receivers = MacaronWorldShadowReceivers.Apply(avatar, MacaronWorldShadowReceivers.MaterialFolder(folder), new Vector4(extent, near, far, captureKey));
             MacaronCore.SyncCapturePasses(avatar);
             var old = avatar.transform.Find(ObjectName);
             if(old != null) Undo.DestroyObjectImmediate(old.gameObject);

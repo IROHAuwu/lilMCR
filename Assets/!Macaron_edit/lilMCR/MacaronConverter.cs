@@ -41,7 +41,7 @@ namespace liltoon_MCR
         private const string PrefTier = "Macaron.Converter.Tier5";
         private const string PrefRestoreCleanup = "Macaron.Converter.RestoreCleanup";
         // Stored in the .meta (importer userData) of every converted material: "MacaronSource:<guid>:<local id>".
-        private const string SourceTag = "MacaronSource:";
+        public const string SourceTag = "MacaronSource:";
         private Dictionary<Material, Material> restoreMap = new Dictionary<Material, Material>();
         // FindSource results (its name fallback searches the project). Cleared when the project changes.
         private readonly Dictionary<Material, Material> sourceCache = new Dictionary<Material, Material>();
@@ -301,7 +301,7 @@ namespace liltoon_MCR
 
             if(reset > 0)
             {
-                EditorGUILayout.LabelField(ML.T("「重置」= 已經是 Macaron 的材質，設定會恢復成預設值並套用下面的影子方向。"), EditorStyles.wordWrappedMiniLabel);
+                EditorGUILayout.LabelField(ML.T("「重置」= 已經是 Macaron 的材質，設定會恢復成預設值並套用下面的影子方向（遮罩貼圖會保留）。"), EditorStyles.wordWrappedMiniLabel);
             }
 
             showList = EditorGUILayout.Foldout(showList, ML.F("材質清單（{0}）", plan.Count), true);
@@ -350,9 +350,11 @@ namespace liltoon_MCR
                 {
                     if(m == null || !seen.Add(m)) continue;
                     plan.Add(Classify(m, r));
-                    if(!MacaronCore.IsMacaronShader(m.shader)) continue;
+                    // Restore covers every material the tools put on the avatar: the converted ones, and the World
+                    // Shadow receiver copies of materials that were never converted (FakeShadow, Overlay, FurOnly...).
+                    if(!MacaronCore.IsMacaronShader(m.shader) && !MacaronWorldShadowReceivers.IsReceiverCopy(m)) continue;
                     Material source;
-                    if(!sourceCache.TryGetValue(m, out source)) sourceCache[m] = source = FindSource(m);
+                    if(!sourceCache.TryGetValue(m, out source)) sourceCache[m] = source = FindOriginal(m);
                     if(source != null) restoreMap[m] = source;
                     else restoreMissing++;
                 }
@@ -413,7 +415,7 @@ namespace liltoon_MCR
             Dictionary<Material, Material> result = new Dictionary<Material, Material>(plan.Count);
             string folder = MacaronCore.ConvertedFolder + "/" + MacaronCore.SafeFileName(avatar.name);
             MacaronCore.EnsureFolder(folder);
-            int converted = 0, reset = 0, skipped = 0;
+            int converted = 0, reset = 0, skipped = 0, failed = 0;
             StringBuilder log = new StringBuilder();
 
             foreach(Entry e in plan)
@@ -422,13 +424,24 @@ namespace liltoon_MCR
                 switch(e.Action)
                 {
                     case Job.Convert:
-                        output = ConvertLilToon(e.Material, Shader.Find(e.Target), folder);
+                        // One material that cannot be copied (a broken asset) must not stop the whole avatar:
+                        // it keeps its original material and the rest is converted.
+                        try { output = ConvertLilToon(e.Material, Shader.Find(e.Target), folder); }
+                        catch(Exception ex) { output = null; Debug.LogException(ex, e.Material); }
+                        if(output == null)
+                        {
+                            failed++;
+                            log.AppendLine(ML.F("失敗  {0} : 無法複製這個材質（材質資產可能已損壞，例如找不到父材質的 Material Variant），保持原樣。", e.Material.name));
+                            break;
+                        }
                         converted++;
                         log.AppendLine(ML.F("轉換  {0} : {1} → {2}", e.Material.name, e.Material.shader.name, e.Target));
                         break;
                     case Job.Reset:
                         Undo.RecordObject(e.Material, "Macaron Reset");
-                        MacaronCore.ResetToDefaults(e.Material, true);
+                        // Values only: the mask textures stay (as the quality tiers leave them), so running the
+                        // Converter again after adding clothes does not throw away the Mask Generator's work.
+                        MacaronCore.ResetToDefaults(e.Material, false);
                         if(MacaronCore.SyncCapturePass(e.Material)) EditorUtility.SetDirty(e.Material);
                         output = e.Material;
                         reset++;
@@ -490,8 +503,9 @@ namespace liltoon_MCR
             sourceCache.Clear();
 
             Debug.Log("[Macaron] " + avatar.name + "\n" + log);
-            resultType = MessageType.Info;
+            resultType = failed > 0 ? MessageType.Warning : MessageType.Info;
             resultMessage = ML.F("完成！轉換 {0}、重置 {1}、略過 {2}。", converted, reset, skipped) +
+                            (failed > 0 ? "\n" + ML.F("有 {0} 個材質無法複製，已保持原樣（材質資產可能已損壞，例如找不到父材質的 Material Variant）。", failed) : string.Empty) +
                             (depthSourceAdded ? "\n" + ML.T("已把 MCR_DepthSource（產生深度貼圖用的光源）加到角色底下。") : string.Empty) +
                             (adjusterMessage != null ? "\n" + adjusterMessage : string.Empty) +
                             (string.IsNullOrEmpty(uzumoreMessage) ? string.Empty : "\n" + uzumoreMessage) +
@@ -517,8 +531,10 @@ namespace liltoon_MCR
             bool keepQueue = source.shader == null || source.renderQueue != source.shader.renderQueue;
             int queue = source.renderQueue;
 
-            Material copy = new Material(source) { name = ConvertedName(source.name), shader = target };
-            if(keepQueue) copy.renderQueue = queue;
+            Material copy = Duplicate(source, target);
+            if(copy == null) return null;
+            copy.name = ConvertedName(source.name);
+            copy.renderQueue = keepQueue ? queue : -1;
             // The source may have used Macaron before and still store _MCR_ values: start from the defaults.
             MacaronCore.ResetToDefaults(copy, true);
             // A converted material has no world shadow capture until World Shadow is created: clear a capture key
@@ -526,6 +542,49 @@ namespace liltoon_MCR
             if(copy.HasProperty("_MCR_WorldCapture")) copy.SetVector("_MCR_WorldCapture", Vector4.zero);
             MacaronCore.SyncCapturePass(copy);
             return Save(copy, folder);
+        }
+
+        // A copy of the source on the target shader, as an ordinary material, or null when the source cannot be copied.
+        //   Material Variants need care (Unity 2022):
+        //   - a copy of a variant is a variant too, and Unity refuses to change the shader of a variant ("Trying to
+        //     set shader on a Material Variant"): the copy would be saved with its lilToon shader. The copy is cut
+        //     loose from its parent first; it keeps every value, inherited ones included.
+        //   - a variant whose parent material is gone (deleted, or never imported) cannot be copied at all:
+        //     "new Material(source)" logs "has a missing parent" and returns a dead object. What such a material
+        //     still holds (its own overrides) is copied into a new material instead.
+        private static Material Duplicate(Material source, Shader target)
+        {
+            if(source == null || target == null) return null;
+            Material copy = null;
+            bool orphan = source.isVariant && source.parent == null;
+            if(!orphan)
+            {
+                try { copy = new Material(source); }
+                catch(Exception) { copy = null; }
+                if(copy != null && copy.isVariant) copy.parent = null;
+                if(copy != null && copy.isVariant)
+                {
+                    UnityEngine.Object.DestroyImmediate(copy);
+                    copy = null;
+                }
+                if(copy != null) copy.shader = target;
+            }
+            if(copy == null)
+            {
+                try
+                {
+                    copy = new Material(target);
+                    copy.CopyPropertiesFromMaterial(source);
+                    if(copy.isVariant) copy.parent = null;
+                }
+                catch(Exception) { copy = null; }
+            }
+            if(copy != null && copy.shader != target)
+            {
+                UnityEngine.Object.DestroyImmediate(copy);
+                copy = null;
+            }
+            return copy;
         }
 
         // CreateAsset turns the object itself into the asset, so the same instance is returned (no reload).
@@ -566,6 +625,21 @@ namespace liltoon_MCR
         // The material a converted one was made from, or null. Materials converted before the source was recorded are
         // matched by name (the converted name minus the Macaron suffix), only when exactly one non-Macaron material
         // outside the converted folder has that name.
+        // FindSource, followed through a receiver copy of a converted material down to the material the avatar had
+        // before the tools touched it.
+        private static Material FindOriginal(Material m)
+        {
+            Material source = FindSource(m);
+            for(int i = 0; i < 4 && source != null; i++)
+            {
+                if(!MacaronCore.IsMacaronShader(source.shader) && !MacaronWorldShadowReceivers.IsReceiverCopy(source)) break;
+                Material next = FindSource(source);
+                if(next == null || next == source) break;
+                source = next;
+            }
+            return source;
+        }
+
         private static Material FindSource(Material converted)
         {
             string path = AssetDatabase.GetAssetPath(converted);

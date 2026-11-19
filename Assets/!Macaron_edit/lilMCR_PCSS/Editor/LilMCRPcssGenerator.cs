@@ -199,6 +199,11 @@ namespace lilMCR.PCSS
                 if(!string.IsNullOrEmpty(dir)) Directory.CreateDirectory(dir);
                 if(File.Exists(path) && File.ReadAllText(path) == kv.Value) continue;
                 File.WriteAllText(path, kv.Value, new UTF8Encoding(false));
+                // A new file gets a .meta with a fixed GUID (Unity would give it a random one): deleting the add-on
+                // folder and importing it again then generates the same shaders with the same GUIDs, and the PCSS
+                // materials keep their shader. An existing .meta is never touched.
+                if(!File.Exists(path + ".meta"))
+                    File.WriteAllText(path + ".meta", "fileFormatVersion: 2\nguid: " + StableGuid(kv.Key) + "\n", new UTF8Encoding(false));
                 changedPaths.Add(path);
                 written++;
             }
@@ -229,6 +234,19 @@ namespace lilMCR.PCSS
             }
             LastOk = true;
             return true;
+        }
+
+        // GUID of a generated file: the same for the same path inside the Generated folder, in every project.
+        private static string StableGuid(string relativePath)
+        {
+            string key = "lilMCR_PCSS/" + GeneratedFolderName + "/" + relativePath.Replace('\\', '/').ToLowerInvariant();
+            using(var md5 = System.Security.Cryptography.MD5.Create())
+            {
+                byte[] hash = md5.ComputeHash(Encoding.UTF8.GetBytes(key));
+                StringBuilder sb = new StringBuilder(32);
+                foreach(byte b in hash) sb.Append(b.ToString("x2"));
+                return sb.ToString();
+            }
         }
 
         private static bool Fail(string key, params object[] args)
