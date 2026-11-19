@@ -1719,6 +1719,10 @@ float MCR_UzuLandNear()
 #define MCR_TOUCH_BULGE_START 0.8
 #define MCR_TOUCH_BULGE_PEAK 1.3
 #define MCR_TOUCH_BULGE_END 2.4
+// Shadow of the finger: gone this far from the finger (m, x the sender scale); its edge widens by this much per
+// meter of distance.
+#define MCR_TOUCH_CAST_RANGE 0.07
+#define MCR_TOUCH_CAST_SPREAD 0.28
 float4x4 _VRChatContact_Transforms_lilMCRTouch[9];
 float4 _VRChatContact_Data_lilMCRTouch[9];
 static float mcrVertDent = 0.0;     // vertex stage: how far this vertex was moved, in or out (m)
@@ -1812,6 +1816,7 @@ static bool mcrTouchDone = false;   // fragment stage: the values below are eval
 static float mcrTouchFade = 0.0;    // 0..1, how much Macaron_Apply is faded out here
 static float mcrTouchShade = 0.0;   // 0..1, shade of the pit
 static float mcrTouchNear = 0.0;    // 0..1, closeness to the finger (1 = touching), for the flush
+static float mcrTouchCast = 0.0;    // 0..1, shadow the finger itself casts here
 static float3 mcrTouchNormal = 0.0; // direction the normal leans to, times its weight (0 = unchanged)
 void Macaron_TouchEval(lilFragData fd)
 {
@@ -1831,6 +1836,11 @@ void Macaron_TouchEval(lilFragData fd)
     float nearest = 0.0;
     float lean = 0.0;
     float3 leanDir = 0.0;
+    // Shadow of the finger itself: toward the light of Macaron's contact shadow (Light Direction / Space).
+    float3 lightWS = mul(MCR_ShadowLightDirView(), (float3x3)LIL_MATRIX_V);
+    lightWS *= rsqrt(max(dot(lightWS, lightWS), 1e-12));
+    float lit = saturate(dot(n, lightWS) * 4.0);
+    float cast = 0.0;
     [loop]
     for(int i = 0; i < MCR_TOUCH_MAX; i++)
     {
@@ -1848,6 +1858,32 @@ void Macaron_TouchEval(lilFragData fd)
         float3 center = m._m03_m13_m23;
         float3 v = fd.positionWS - (center + axis * clamp(dot(fd.positionWS - center, axis), -halfLength, halfLength));
         float d = length(v);
+        // Cast shadow: closest approach of the ray pixel -> light to the capsule axis. The edge widens with the
+        // distance to the finger (a sharp outline of the finger when it touches, soft and gone a few centimeters
+        // away); a pixel inside the capsule (the finger's own skin, with the wearer's fingers allowed) is left out.
+        [branch]
+        if(lit > 0.0 && _MCR_TouchCast > 0.0)
+        {
+            float3 segA = center - axis * halfLength;
+            float3 segB = axis * (halfLength * 2.0);
+            float3 toPixel = fd.positionWS - segA;
+            float bb = dot(segB, segB);
+            float bl = dot(segB, lightWS);
+            float denom = bb - bl * bl;
+            float along = denom > 1e-10 ? saturate((dot(segB, toPixel) - bl * dot(lightWS, toPixel)) / denom) : 0.5;
+            float3 toAxis = segA + segB * along - fd.positionWS;
+            float t = dot(toAxis, lightWS);
+            [branch]
+            if(t > 0.0)
+            {
+                float miss = length(toAxis - lightWS * t);
+                float blur = max(t * MCR_TOUCH_CAST_SPREAD, radius * 0.08);
+                float c = 1.0 - smoothstep(radius - blur, radius + blur, miss);
+                c *= 1.0 - smoothstep(MCR_TOUCH_CAST_RANGE * 0.4 * scale, MCR_TOUCH_CAST_RANGE * scale, t);
+                c *= smoothstep(radius * 0.9, radius * 1.05, d);
+                cast = max(cast, c * lit);
+            }
+        }
         // The pit reaches radius + soft from the axis (Macaron_TouchOS), but a displaced vertex takes its whole
         // triangles with it: on a coarse mesh the surface sinks a few centimeters further out. Macaron_Apply is faded
         // over that margin.
@@ -1874,6 +1910,7 @@ void Macaron_TouchEval(lilFragData fd)
     mcrTouchShade = shade;
     mcrTouchFade = fade;
     mcrTouchNear = nearest;
+    mcrTouchCast = cast;
     mcrTouchNormal = leanDir * lean;
 #endif
 }
@@ -1910,6 +1947,8 @@ void Macaron_TouchShadeFS(inout lilFragData fd)
     // Pressed flesh is pale right under the finger: the shade is held back there (Touch Flush).
     float pale = smoothstep(0.75, 1.0, mcrTouchNear) * flush;
     float amount = mcrTouchShade * saturate(_MCR_TouchShade) * (1.0 - 0.7 * pale);
+    // The pressed shade and the finger's own shadow do not add up: the darker of the two.
+    amount = max(amount, mcrTouchCast * saturate(_MCR_TouchCast));
     [branch]
     if(amount <= 0.0 && flush <= 0.0) return;
     // Shade color = the base color of the surface, deepened: the hue of the albedo (scaled to full brightness) cubed

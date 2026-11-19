@@ -103,6 +103,7 @@
     float _MCR_TouchShade; \
     float _MCR_TouchBulge; \
     float _MCR_TouchFlush; \
+    float _MCR_TouchCast; \
     float _MCR_LocalOnly;
 
 // Textures only. Sampled with lilToon's shared sampler (lil_sampler_linear_repeat), so no sampler is added.

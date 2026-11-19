@@ -345,6 +345,8 @@ namespace liltoon_MCR
                 "表面最多凹下去多深。手指壓得比這更深時會穿過去。"));
             touch.Props.Add(P("_MCR_TouchShade", "凹陷的陰影", MacaronPropKind.Slider,
                 "凹陷處和周圍加上一層柔和的漸層陰影，看起來像被壓進去。0 = 不加。"));
+            touch.Props.Add(P("_MCR_TouchCast", "手指的影子", MacaronPropKind.Slider,
+                "手指本身投在表面上的影子，形狀和粗細跟著手指。碰到時輪廓清楚，離開幾公分就變柔並消失。方向用接觸陰影的光方向。0 = 不加。"));
             touch.Props.Add(P("_MCR_TouchBulge", "周圍隆起 (m)", MacaronPropKind.Slider,
                 "被壓下去的肉往旁邊擠，在凹陷外圍鼓起一圈的高度。壓得越深鼓得越高。0 = 不隆起。"));
             touch.Props.Add(P("_MCR_TouchNormal", "凹陷的光影", MacaronPropKind.Slider,
