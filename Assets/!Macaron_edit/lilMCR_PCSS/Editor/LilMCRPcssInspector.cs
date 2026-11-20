@@ -100,6 +100,17 @@ namespace lilToon
                 EditorGUILayout.LabelField(PcssText.S("角色共用：修改此項會同步所有 PCSS 材質。"), EditorStyles.wordWrappedMiniLabel);
                 return;
             }
+            if(name == "Mode" && p != null)
+            {
+                // Three buttons: one click switches the shadow type, the sliders below stay as they are.
+                int current = Mathf.Clamp(Mathf.RoundToInt(p.floatValue), 0, 2);
+                EditorGUILayout.PrefixLabel(PcssText.S("影子類型"));
+                EditorGUI.BeginChangeCheck();
+                int next = GUILayout.Toolbar(p.hasMixedValue ? -1 : current, new[] { "PCSS", "PCF", PcssText.S("銳利接觸") });
+                if(EditorGUI.EndChangeCheck() && next >= 0) p.floatValue = next;
+                EditorGUILayout.LabelField(PcssText.S("PCSS：離遮擋物越遠越柔和。PCF：整體同一個柔和度，最省效能。銳利接觸：貼近遮擋物是清楚的線，離遠才變柔（HFTS 風格）。三種共用同一張陰影貼圖和下面的拉桿。"), EditorStyles.wordWrappedMiniLabel);
+                return;
+            }
             string zh;
             if(p != null) m_MaterialEditor.ShaderProperty(p, Labels.TryGetValue(name, out zh) ? PcssText.S(zh) : p.displayName);
             if(name == "DepthBias" && p != null)
@@ -166,6 +177,7 @@ namespace lilToon
                                 Row("PenumbraColor");
                                 Row("PenumbraColor2");
                                 Row("BackShadow");
+                                Row("Mode");
                                 Row("LightSize");
                                 EditorGUILayout.LabelField(PcssText.S("柔和度為 0 時，只使用最小模糊，寬度不隨遮擋物距離改變；大於 0 時啟用距離相關柔影。最小模糊以陰影貼圖像素計算。"), EditorStyles.wordWrappedMiniLabel);
                                 Row("BlockerRange");

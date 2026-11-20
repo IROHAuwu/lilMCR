@@ -388,12 +388,32 @@ float LMP_Shadow(float3 positionWS, float3 N, float ndl)
     float unbiasedDepth = stored.x + stored.y / (wR * wSign);
     float depthWidth = min(0.25 * dot(abs(gradient), 1.0 / size),
         0.5 * abs(zCompare - unbiasedDepth));
+    // Shadow type. The three share the shadow map, the depth comparison and every slider:
+    //   0 PCSS          : blocker search, then a filter as wide as the penumbra (softer with distance).
+    //   1 PCF           : no blocker search; one filter width everywhere, the width PCSS gives an occluder a fifth
+    //                     of the Blocker Search Range away (0.1 m by default), so switching keeps a similar softness.
+    //                     The cheapest: about half the reads of PCSS.
+    //   2 Sharp contact : PCSS without the Minimum Blur floor, and the edge is drawn as a crisp line next to the
+    //                     occluder that widens into the soft penumbra over Minimum Blur texels. The look of hybrid
+    //                     frustum traced shadows (hard at the contact, soft far away); the tracing itself needs the
+    //                     scene's triangles and cannot be done in an avatar shader, so the hard part is still limited
+    //                     by the shadow map resolution.
+    int shadowType = (int)clamp(round(_lilMCRPCSS_Mode), 0.0, 2.0);
+    bool fixedWidth = shadowType == 1;
+    bool sharpContact = shadowType == 2;
     float minFilterUV = min(texel * max(_lilMCRPCSS_MinBlur, 0.0), LMP_MAX_UV);
-    float filterUV = minFilterUV;
+    float floorUV = sharpContact ? 0.0 : minFilterUV;
+    float filterUV = floorUV;
+    [branch]
+    if(fixedWidth && lightSize > 0.0)
+    {
+        float wRef = max(wR - max(_lilMCRPCSS_BlockerRange, 0.0) * 0.2 * p.k, wR * 0.1);
+        filterUV = clamp(lightSize * (wR - wRef) / wRef * p.S / wR, minFilterUV, LMP_MAX_UV);
+    }
     // 1 = every tap of the blocker search is a blocker: the point is deep inside the shadow (see below).
     float umbra = 0.0;
     [branch]
-    if(lightSize > 0.0)
+    if(lightSize > 0.0 && !fixedWidth)
     {
         float wMin = max(wR - max(_lilMCRPCSS_BlockerRange, 0.0) * p.k, wR * 0.1);
         float searchUV = clamp(lightSize * p.S * (wR - wMin) / max(wR * wMin, LMP_EPS), texel * 1.5, LMP_MAX_UV);
@@ -457,8 +477,8 @@ float LMP_Shadow(float3 positionWS, float3 N, float ndl)
         if(blockerCount > LMP_EPS)
         {
             float wB = max(distanceSum / blockerCount, LMP_TINY);
-            float penumbra = clamp(lightSize * max(wR-wB,0.0)/wB*p.S/wR, minFilterUV, LMP_MAX_UV);
-            filterUV = lerp(minFilterUV, penumbra, smoothstep(0.0,1.0,blockerCount));
+            float penumbra = clamp(lightSize * max(wR-wB,0.0)/wB*p.S/wR, floorUV, LMP_MAX_UV);
+            filterUV = lerp(floorUV, penumbra, smoothstep(0.0,1.0,blockerCount));
         }
         // No blockers: still evaluate the local/minimum filter. A sparse search
         // is not proof that the receiving pixel is lit, especially on hair cards.
@@ -479,12 +499,16 @@ float LMP_Shadow(float3 positionWS, float3 N, float ndl)
     //    the occluder's shape with smooth texel edges instead of blocky texels, without noise.
     //    Wider penumbra: bilinearly reconstructed taps over the penumbra disc, center weighted, blended in smoothly.
     float radiusPx = filterUV / texel;
+    // Sharp contact: the filtered edge is tightened around its middle. Next to the occluder (penumbra near 0) it
+    // becomes a crisp, smooth line instead of a texel-wide blur; from Minimum Blur texels of penumbra on it is the
+    // plain soft edge again.
+    float edge = sharpContact ? clamp(radiusPx / max(_lilMCRPCSS_MinBlur, 1.0), 0.15, 1.0) : 1.0;
     float dense = 0.0;
     float denseBlend = smoothstep(4.0, 5.0, radiusPx);
     if(denseBlend < 1.0)
     {
-        dense = LMP_DenseFilter(uv, max(radiusPx, 1.0), zCompare, gradient, size, zDir, depthWidth);
-        if(radiusPx <= 4.0) return dense * (1.0 - umbra);
+        dense = LMP_DenseFilter(uv, max(radiusPx, sharpContact ? 1.5 : 1.0), zCompare, gradient, size, zDir, depthWidth);
+        if(radiusPx <= 4.0) return saturate((dense - 0.5) / edge + 0.5) * (1.0 - umbra);
     }
     // Only radius > 4 reaches here.
     // Equal-weight opposite pairs have exactly zero centroid at every quality.
@@ -507,7 +531,7 @@ float LMP_Shadow(float3 positionWS, float3 N, float ndl)
         disc += LMP_PlaneFilter(uv + o * filterUV, uv, zCompare, gradient, size, zDir, depthWidth) * wgt;
     }
     float lit = disc / max(weightSum, LMP_EPS);
-    return lerp(dense, lit, denseBlend) * (1.0 - umbra);
+    return saturate((lerp(dense, lit, denseBlend) - 0.5) / edge + 0.5) * (1.0 - umbra);
 }
 
 // Shadow amount 0..1 (1 = fully in the cast shadow) at a surface point.
