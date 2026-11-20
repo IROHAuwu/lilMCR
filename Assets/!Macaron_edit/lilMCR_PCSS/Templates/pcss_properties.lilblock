@@ -12,7 +12,7 @@
         _lilMCRPCSS_PenumbraSaturation ("PCSS Penumbra Saturation", Range(0, 3)) = 1.5
         _lilMCRPCSS_BackShadow ("PCSS Shadow On Back Faces", Range(0, 1)) = 1
         // 0 = PCSS (softer with distance), 1 = PCF (the same softness everywhere).
-        // Both read the same shadow map and use the same sliders.
+        // Both read the same shadow map and use the same sliders (PCF does not use the Blocker Search Range).
         [IntRange] _lilMCRPCSS_Mode ("PCSS Shadow Type (0 PCSS - 1 PCF)", Range(0, 1)) = 0
         _lilMCRPCSS_LightSize ("Light Size (m)", Range(0, 0.5)) = 0.005
         _lilMCRPCSS_BlockerRange ("Blocker Search Range (m)", Range(0.05, 1.5)) = 0.5

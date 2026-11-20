@@ -177,7 +177,7 @@ namespace lilMCR.PCSS
 
             GUILayout.Space(4f);
             LilMCRPcssSetup.PreviewButton(avatar);
-            EditorGUILayout.LabelField(PcssText.S("柔和度為 0 時，只使用最小模糊，寬度不隨遮擋物距離改變；大於 0 時啟用距離相關柔影。最小模糊以陰影貼圖像素計算。"), EditorStyles.wordWrappedMiniLabel);
+            EditorGUILayout.LabelField(PcssText.S("PCSS：柔和度為 0 時只使用最小模糊；大於 0 時離遮擋物越遠越柔。PCF：柔和度是整體固定的寬度（相當於 PCSS 在遮擋物距離 0.1 m 時），不使用遮擋物搜尋範圍。最小模糊以陰影貼圖像素計算。"), EditorStyles.wordWrappedMiniLabel);
             DrawMaterials(all);
             List<Material> targets = Targets(all);
 
@@ -304,10 +304,13 @@ namespace lilMCR.PCSS
             {
                 int v = Mathf.Clamp(Mathf.RoundToInt(ms[0].GetFloat(prop)), 0, 1);
                 bool mixed = ms.Any(m => Mathf.RoundToInt(m.GetFloat(prop)) != v);
+                EditorGUILayout.BeginHorizontal();
                 EditorGUILayout.PrefixLabel(label);
                 EditorGUI.BeginChangeCheck();
                 int n = GUILayout.Toolbar(mixed ? -1 : v, new[] { "PCSS", "PCF" });
-                if(EditorGUI.EndChangeCheck() && n >= 0)
+                bool changed = EditorGUI.EndChangeCheck();
+                EditorGUILayout.EndHorizontal();
+                if(changed && n >= 0)
                 {
                     Undo.RecordObjects(ms.ToArray(), "lilMCR PCSS Batch");
                     foreach(Material m in ms) { m.SetFloat(prop, n); EditorUtility.SetDirty(m); }
@@ -332,12 +335,17 @@ namespace lilMCR.PCSS
                 if(idx >= 0 && shader.GetPropertyType(idx) == UnityEngine.Rendering.ShaderPropertyType.Range) lim = shader.GetPropertyRangeLimits(idx);
                 float v = ms[0].GetFloat(prop);
                 EditorGUI.showMixedValue = ms.Any(m => !Mathf.Approximately(m.GetFloat(prop), v));
+                // PCF has no blocker search: the range is not used when every target is PCF.
+                bool unused = r.Prop == "BlockerRange" && ms.All(m => m.HasProperty(Prefix + "Mode") && m.GetFloat(Prefix + "Mode") > 0.5f);
+                EditorGUI.BeginDisabledGroup(unused);
                 EditorGUI.BeginChangeCheck();
                 float n = r.Kind == Kind.IntSlider
                     ? EditorGUILayout.IntSlider(label, Mathf.RoundToInt(v), Mathf.RoundToInt(lim.x), Mathf.RoundToInt(lim.y))
                     : EditorGUILayout.Slider(label, v, lim.x, lim.y);
+                bool edited = EditorGUI.EndChangeCheck();
+                EditorGUI.EndDisabledGroup();
                 EditorGUI.showMixedValue = false;
-                if(EditorGUI.EndChangeCheck())
+                if(edited)
                 {
                     Undo.RecordObjects(ms.ToArray(), "lilMCR PCSS Batch");
                     foreach(Material m in ms) { m.SetFloat(prop, n); EditorUtility.SetDirty(m); }

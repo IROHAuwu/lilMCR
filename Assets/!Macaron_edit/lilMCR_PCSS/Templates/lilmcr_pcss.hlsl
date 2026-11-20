@@ -331,6 +331,9 @@ float LMP_DenseFilter(float2 uv, float radius, float zCompare, float2 gradient,
     }
     return sum / max(weightSum, LMP_EPS);
 }
+// PCF: the distance between occluder and surface (m) that its one filter width stands for.
+#define LMP_PCF_REFERENCE 0.1
+
 // Soft shadow: 1 = lit, 0 = shadowed.
 float LMP_Shadow(float3 positionWS, float3 N, float ndl)
 {
@@ -390,16 +393,16 @@ float LMP_Shadow(float3 positionWS, float3 N, float ndl)
         0.5 * abs(zCompare - unbiasedDepth));
     // Shadow type. Both share the shadow map, the depth comparison and every slider:
     //   0 PCSS : blocker search, then a filter as wide as the penumbra (softer with distance).
-    //   1 PCF  : no blocker search; one filter width everywhere, the width PCSS gives an occluder a fifth of the
-    //            Blocker Search Range away (0.1 m by default), so switching keeps a similar softness. The cheaper
-    //            one: about half the reads of PCSS.
+    //   1 PCF  : no blocker search; one filter width everywhere, the width PCSS gives an occluder
+    //            LMP_PCF_REFERENCE (0.1 m) away, so switching keeps a similar softness. Blocker Search Range is not
+    //            used. The cheaper one: in a close-up it took a bit less than half the time of the PCSS pass.
     bool fixedWidth = _lilMCRPCSS_Mode > 0.5;
     float minFilterUV = min(texel * max(_lilMCRPCSS_MinBlur, 0.0), LMP_MAX_UV);
     float filterUV = minFilterUV;
     [branch]
     if(fixedWidth && lightSize > 0.0)
     {
-        float wRef = max(wR - max(_lilMCRPCSS_BlockerRange, 0.0) * 0.2 * p.k, wR * 0.1);
+        float wRef = max(wR - LMP_PCF_REFERENCE * p.k, wR * 0.1);
         filterUV = clamp(lightSize * (wR - wRef) / wRef * p.S / wR, minFilterUV, LMP_MAX_UV);
     }
     [branch]
@@ -507,8 +510,13 @@ float LMP_Shadow(float3 positionWS, float3 N, float ndl)
 }
 
 // Shadow amount 0..1 (1 = fully in the cast shadow) at a surface point.
-float LMP_ShadowAmount(float3 positionWS, float3 normalWS)
+//   cast : the shadow map's own answer (0 lit .. 1 shadowed), before the fades. Only its in-between values are a
+//          penumbra.
+//   fade : the cone edge and back-face fades (0..1). The returned amount is cast * fade.
+float LMP_ShadowAmount(float3 positionWS, float3 normalWS, out float cast, out float fade)
 {
+    cast = 0.0;
+    fade = 0.0;
     float cone = LMP_Cone(positionWS);
     [branch]
     if(cone <= 0.0) return 0.0;
@@ -520,7 +528,9 @@ float LMP_ShadowAmount(float3 positionWS, float3 normalWS)
     if(facing <= 0.0) return 0.0;
 
     float lit = LMP_Shadow(positionWS, N, max(ndl, 0.0));
-    return (1.0 - lit) * cone * facing;
+    cast = 1.0 - lit;
+    fade = cone * facing;
+    return cast * fade;
 }
 
 #endif
@@ -658,9 +668,9 @@ float4 lmpFrag(lmpV2F input) : SV_Target
     float weight = LMP_Weight() * alpha * mask;
     [branch]
     if(weight <= 0.0) return float4(1.0, 1.0, 1.0, 1.0);
-    float shadow = 0.0;
+    float shadow = 0.0, cast = 0.0, fade = 0.0;
 #if defined(LMP_ACTIVE)
-    shadow = LMP_ShadowAmount(input.positionWS, input.normalWS);
+    shadow = LMP_ShadowAmount(input.positionWS, input.normalWS, cast, fade);
 #endif
     float amount = shadow * weight;
     [branch]
@@ -672,6 +682,9 @@ float4 lmpFrag(lmpV2F input) : SV_Target
     //   The band is strongest where the shadow is half way and gone in full light and full shadow, so it is exactly
     //   as wide as the penumbra: thin next to the occluder, wide far from it. It reuses the shadow amount: no extra
     //   shadow map read, a few multiplications, skipped entirely at 0.
+    //   "Half way" is read from the shadow map's own answer (cast), not from the final amount: the cone edge and the
+    //   back-face fade also give in-between amounts, and a pixel fully in shadow there is no penumbra. The band is
+    //   then faded like the shadow itself.
     //   Where the color comes from is a blend, every step of it a slider (no switch):
     //     Use Base Color : 0 = the two chosen colors, 1 = the surface's own base color, in between = a mix of both.
     //     Saturation     : saturation of that result. 0 = neutral (no tint), 1 = as is, above 1 = more vivid: a pale
@@ -682,14 +695,14 @@ float4 lmpFrag(lmpV2F input) : SV_Target
     if(penumbraTint > 0.0)
     {
         float3 albedo = saturate(baseColor.rgb);
-        float3 chosen = lerp(saturate(_lilMCRPCSS_PenumbraColor.rgb), saturate(_lilMCRPCSS_PenumbraColor2.rgb), smoothstep(0.25, 0.75, shadow));
+        float3 chosen = lerp(saturate(_lilMCRPCSS_PenumbraColor.rgb), saturate(_lilMCRPCSS_PenumbraColor2.rgb), smoothstep(0.25, 0.75, cast));
         float3 hue = lerp(chosen, albedo, saturate(_lilMCRPCSS_PenumbraAlbedo));
         float hueL = dot(hue, float3(0.2126, 0.7152, 0.0722));
         hue = max(lerp(hueL.xxx, hue, max(_lilMCRPCSS_PenumbraSaturation, 0.0)), 0.0);
         float hueMax = max(max(hue.r, hue.g), hue.b);
         // A black surface has no hue to give: no tint there.
         hue = hueMax > 1e-4 ? hue / hueMax : 1.0.xxx;
-        float band = 4.0 * shadow * (1.0 - shadow);
+        float band = 4.0 * cast * (1.0 - cast) * fade;
         result *= lerp(1.0.xxx, hue, band * penumbraTint * weight);
     }
     return float4(result, 1.0);

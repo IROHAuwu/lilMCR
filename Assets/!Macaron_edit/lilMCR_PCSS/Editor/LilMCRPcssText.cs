@@ -37,7 +37,7 @@ namespace lilMCR.PCSS
         private static readonly Dictionary<string, string[]> Table = new Dictionary<string, string[]>
         {
             { "一鍵套用品質檔次", new[] { "One-click quality tier", "品質プリセットを一括適用", "품질 프리셋 한 번에 적용" } },
-            { "柔和度為 0 時，只使用最小模糊，寬度不隨遮擋物距離改變；大於 0 時啟用距離相關柔影。最小模糊以陰影貼圖像素計算。", new[] { "With Softness 0 only the minimum blur is used and its width does not change with the occluder distance; above 0 the distance-dependent soft shadow is enabled. The minimum blur is measured in shadow map texels.", "柔らかさが 0 のときは最小ぼかしだけを使い、幅は遮蔽物までの距離で変わりません。0 より大きいと距離に応じた柔らかい影になります。最小ぼかしはシャドウマップのテクセル単位です。", "부드러움이 0이면 최소 블러만 사용하며 폭은 차폐물 거리에 따라 바뀌지 않습니다. 0보다 크면 거리에 따른 부드러운 그림자가 켜집니다. 최소 블러는 그림자 맵 텍셀 단위입니다." } },
+            { "PCSS：柔和度為 0 時只使用最小模糊；大於 0 時離遮擋物越遠越柔。PCF：柔和度是整體固定的寬度（相當於 PCSS 在遮擋物距離 0.1 m 時），不使用遮擋物搜尋範圍。最小模糊以陰影貼圖像素計算。", new[] { "PCSS: with Softness 0 only the minimum blur is used; above 0 the shadow gets softer the further it is from the occluder. PCF: Softness is one fixed width everywhere (what PCSS gives an occluder 0.1 m away) and the Blocker Search Range is not used. Minimum blur is in shadow map texels.", "PCSS：柔らかさが 0 のときは最小ぼかしのみ、0 より大きいと遮蔽物から離れるほど柔らかくなります。PCF：柔らかさは全体で一定の幅（PCSS で遮蔽物が 0.1 m 離れているときの幅）になり、遮蔽物の探索範囲は使いません。最小ぼかしはシャドウマップのテクセル単位です。", "PCSS: 부드러움이 0이면 최소 블러만 사용하고, 0보다 크면 가리는 물체에서 멀수록 부드러워집니다. PCF: 부드러움은 전체에 고정된 폭(PCSS에서 가리는 물체가 0.1 m 떨어졌을 때의 폭)이며 차폐물 탐색 범위는 사용하지 않습니다. 최소 블러는 섀도 맵 텍셀 단위입니다." } },
             // Shared self-shadow setting (Setup, Batch and material inspector).
             { "僅自身陰影", new[] { "Self Shadows Only", "自身の影のみ", "자신의 그림자만" } },
             { "角色共用：修改此項會同步所有 PCSS 材質。",
