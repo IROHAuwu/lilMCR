@@ -107,7 +107,7 @@ namespace lilToon
                 EditorGUILayout.BeginHorizontal();
                 EditorGUILayout.PrefixLabel(PcssText.S("影子類型"));
                 EditorGUI.BeginChangeCheck();
-                int next = GUILayout.Toolbar(p.hasMixedValue ? -1 : current, new[] { "PCSS", "PCF" });
+                int next = GUILayout.Toolbar(p.hasMixedValue ? -1 : current, new[] { "PCSS", PcssText.S("PCF（輕量）") });
                 if(EditorGUI.EndChangeCheck() && next >= 0) p.floatValue = next;
                 EditorGUILayout.EndHorizontal();
                 EditorGUILayout.LabelField(PcssText.S("PCSS：離遮擋物越遠越柔和。PCF：整體同一個柔和度，較省效能。兩種共用同一張陰影貼圖和下面的拉桿。"), EditorStyles.wordWrappedMiniLabel);

@@ -307,7 +307,7 @@ namespace lilMCR.PCSS
                 EditorGUILayout.BeginHorizontal();
                 EditorGUILayout.PrefixLabel(label);
                 EditorGUI.BeginChangeCheck();
-                int n = GUILayout.Toolbar(mixed ? -1 : v, new[] { "PCSS", "PCF" });
+                int n = GUILayout.Toolbar(mixed ? -1 : v, new[] { "PCSS", PcssText.S("PCF（輕量）") });
                 bool changed = EditorGUI.EndChangeCheck();
                 EditorGUILayout.EndHorizontal();
                 if(changed && n >= 0)
