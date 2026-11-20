@@ -402,8 +402,6 @@ float LMP_Shadow(float3 positionWS, float3 N, float ndl)
         float wRef = max(wR - max(_lilMCRPCSS_BlockerRange, 0.0) * 0.2 * p.k, wR * 0.1);
         filterUV = clamp(lightSize * (wR - wRef) / wRef * p.S / wR, minFilterUV, LMP_MAX_UV);
     }
-    // 1 = every tap of the blocker search is a blocker: the point is deep inside the shadow (see below).
-    float umbra = 0.0;
     [branch]
     if(lightSize > 0.0 && !fixedWidth)
     {
@@ -415,7 +413,6 @@ float LMP_Shadow(float3 positionWS, float3 N, float ndl)
         float localRadius = min(searchUV, texel * 1.5);
         float distanceSum = 0.0;
         float blockerCount = 0.0;
-        float searched = 0.0, localSearched = 0.0, localBlocked = 0.0;
         [loop]
         for(int i = 0; i < nBlocker; i++)
         {
@@ -446,8 +443,6 @@ float LMP_Shadow(float3 positionWS, float3 N, float ndl)
                 int2 px = sampleBase + int2(bx,by);
                 if(any(px < 0) || any(float2(px) >= size)) continue;
                 float weight = (bx == 0 ? 1.0-sf.x : sf.x) * (by == 0 ? 1.0-sf.y : sf.y);
-                searched += weight;
-                if(i < 5) localSearched += weight;
                 float d = depths[by*2+bx];
                 float delta = LMP_LocalPlaneDelta((float2(px)+0.5)/size-uv, gradient, size, zDir);
                 float gap = (d-zCompare-delta)*zDir;
@@ -461,7 +456,6 @@ float LMP_Shadow(float3 positionWS, float3 N, float ndl)
                         float mass = weight * hit;
                         distanceSum += distance * mass;
                         blockerCount += mass;
-                        if(i < 5) localBlocked += mass;
                     }
                 }
             }
@@ -474,16 +468,6 @@ float LMP_Shadow(float3 positionWS, float3 N, float ndl)
         }
         // No blockers: still evaluate the local/minimum filter. A sparse search
         // is not proof that the receiving pixel is lit, especially on hair cards.
-
-        // Every tap blocked: the filter below, which reads inside the searched disc (the penumbra is never wider
-        // than the search), would return about 0 after its 16 to 64 reads. It is skipped: the inside of a shadow,
-        // usually a large part of the shadowed pixels and the part with the widest filter, costs the search only.
-        //   Smooth on both sides: it fades in over the last tenth of blocked taps, so nothing pops where one tap
-        //   leaves the blocker, and the center tap with its four neighbors must be blocked too, so a small lit gap
-        //   at the point itself is never darkened.
-        umbra = smoothstep(0.9, 1.0, blockerCount / max(searched, LMP_EPS))
-              * smoothstep(0.8, 1.0, localBlocked / max(localSearched, LMP_EPS));
-        if(umbra >= 1.0) return 0.0;
     }
 
     // Filter.
@@ -496,7 +480,7 @@ float LMP_Shadow(float3 positionWS, float3 N, float ndl)
     if(denseBlend < 1.0)
     {
         dense = LMP_DenseFilter(uv, max(radiusPx, 1.0), zCompare, gradient, size, zDir, depthWidth);
-        if(radiusPx <= 4.0) return dense * (1.0 - umbra);
+        if(radiusPx <= 4.0) return dense;
     }
     // Only radius > 4 reaches here.
     // Equal-weight opposite pairs have exactly zero centroid at every quality.
@@ -519,7 +503,7 @@ float LMP_Shadow(float3 positionWS, float3 N, float ndl)
         disc += LMP_PlaneFilter(uv + o * filterUV, uv, zCompare, gradient, size, zDir, depthWidth) * wgt;
     }
     float lit = disc / max(weightSum, LMP_EPS);
-    return lerp(dense, lit, denseBlend) * (1.0 - umbra);
+    return lerp(dense, lit, denseBlend);
 }
 
 // Shadow amount 0..1 (1 = fully in the cast shadow) at a surface point.
