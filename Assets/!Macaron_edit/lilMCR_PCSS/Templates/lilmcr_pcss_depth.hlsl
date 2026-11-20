@@ -15,6 +15,7 @@
     float _lilMCRPCSS_ShadowSaturation; \
     float _lilMCRPCSS_Strength; \
     float4 _lilMCRPCSS_PenumbraColor; \
+    float4 _lilMCRPCSS_PenumbraColor2; \
     float _lilMCRPCSS_PenumbraTint; \
     float _lilMCRPCSS_BackShadow; \
     float _lilMCRPCSS_LightSize; \

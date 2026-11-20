@@ -390,6 +390,8 @@ float LMP_Shadow(float3 positionWS, float3 N, float ndl)
         0.5 * abs(zCompare - unbiasedDepth));
     float minFilterUV = min(texel * max(_lilMCRPCSS_MinBlur, 0.0), LMP_MAX_UV);
     float filterUV = minFilterUV;
+    // 1 = every tap of the blocker search is a blocker: the point is deep inside the shadow (see below).
+    float umbra = 0.0;
     [branch]
     if(lightSize > 0.0)
     {
@@ -401,6 +403,7 @@ float LMP_Shadow(float3 positionWS, float3 N, float ndl)
         float localRadius = min(searchUV, texel * 1.5);
         float distanceSum = 0.0;
         float blockerCount = 0.0;
+        float searched = 0.0, localSearched = 0.0, localBlocked = 0.0;
         [loop]
         for(int i = 0; i < nBlocker; i++)
         {
@@ -431,6 +434,8 @@ float LMP_Shadow(float3 positionWS, float3 N, float ndl)
                 int2 px = sampleBase + int2(bx,by);
                 if(any(px < 0) || any(float2(px) >= size)) continue;
                 float weight = (bx == 0 ? 1.0-sf.x : sf.x) * (by == 0 ? 1.0-sf.y : sf.y);
+                searched += weight;
+                if(i < 5) localSearched += weight;
                 float d = depths[by*2+bx];
                 float delta = LMP_LocalPlaneDelta((float2(px)+0.5)/size-uv, gradient, size, zDir);
                 float gap = (d-zCompare-delta)*zDir;
@@ -444,6 +449,7 @@ float LMP_Shadow(float3 positionWS, float3 N, float ndl)
                         float mass = weight * hit;
                         distanceSum += distance * mass;
                         blockerCount += mass;
+                        if(i < 5) localBlocked += mass;
                     }
                 }
             }
@@ -456,6 +462,16 @@ float LMP_Shadow(float3 positionWS, float3 N, float ndl)
         }
         // No blockers: still evaluate the local/minimum filter. A sparse search
         // is not proof that the receiving pixel is lit, especially on hair cards.
+
+        // Every tap blocked: the filter below, which reads inside the searched disc (the penumbra is never wider
+        // than the search), would return about 0 after its 16 to 64 reads. It is skipped: the inside of a shadow,
+        // usually a large part of the shadowed pixels and the part with the widest filter, costs the search only.
+        //   Smooth on both sides: it fades in over the last tenth of blocked taps, so nothing pops where one tap
+        //   leaves the blocker, and the center tap with its four neighbors must be blocked too, so a small lit gap
+        //   at the point itself is never darkened.
+        umbra = smoothstep(0.9, 1.0, blockerCount / max(searched, LMP_EPS))
+              * smoothstep(0.8, 1.0, localBlocked / max(localSearched, LMP_EPS));
+        if(umbra >= 1.0) return 0.0;
     }
 
     // Filter.
@@ -468,7 +484,7 @@ float LMP_Shadow(float3 positionWS, float3 N, float ndl)
     if(denseBlend < 1.0)
     {
         dense = LMP_DenseFilter(uv, max(radiusPx, 1.0), zCompare, gradient, size, zDir, depthWidth);
-        if(radiusPx <= 4.0) return dense;
+        if(radiusPx <= 4.0) return dense * (1.0 - umbra);
     }
     // Only radius > 4 reaches here.
     // Equal-weight opposite pairs have exactly zero centroid at every quality.
@@ -491,7 +507,7 @@ float LMP_Shadow(float3 positionWS, float3 N, float ndl)
         disc += LMP_PlaneFilter(uv + o * filterUV, uv, zCompare, gradient, size, zDir, depthWidth) * wgt;
     }
     float lit = disc / max(weightSum, LMP_EPS);
-    return lerp(dense, lit, denseBlend);
+    return lerp(dense, lit, denseBlend) * (1.0 - umbra);
 }
 
 // Shadow amount 0..1 (1 = fully in the cast shadow) at a surface point.
@@ -655,15 +671,17 @@ float4 lmpFrag(lmpV2F input) : SV_Target
     if(amount <= 0.0) return float4(1.0, 1.0, 1.0, 1.0);
     float3 shadowMul = LMP_ShadowMultiplier(saturate(baseColor.rgb));
     float3 result = lerp(1.0.xxx, shadowMul, amount);
-    // Penumbra tint: the band between light and shadow takes the hue of Penumbra Color (the warm edge of a shadow on
-    // skin). Strongest where the shadow is half way, nothing in full light or full shadow, so it is as wide as the
-    // penumbra itself: narrow next to the occluder, wide far from it. No extra shadow map read: it only reuses the
-    // shadow amount. The color is used as a hue (brightest channel = 1) and multiplied: no channel gets brighter.
+    // Penumbra tint: the edge of a shadow is not a plain fade but a band of two colors, as in hand-drawn animation:
+    // Penumbra Color on the side of the light, Penumbra Color 2 on the side of the shadow.
+    //   The band is strongest where the shadow is half way and gone in full light and full shadow, so it is exactly
+    //   as wide as the penumbra: thin next to the occluder, wide far from it. It reuses the shadow amount: no extra
+    //   shadow map read, a few multiplications, skipped entirely at 0.
+    //   The colors are used as hues (brightest channel = 1) and multiplied: no channel gets brighter.
     float penumbraTint = saturate(_lilMCRPCSS_PenumbraTint);
     [branch]
     if(penumbraTint > 0.0)
     {
-        float3 hue = saturate(_lilMCRPCSS_PenumbraColor.rgb);
+        float3 hue = lerp(saturate(_lilMCRPCSS_PenumbraColor.rgb), saturate(_lilMCRPCSS_PenumbraColor2.rgb), smoothstep(0.25, 0.75, shadow));
         hue /= max(max(hue.r, hue.g), max(hue.b, 1e-4));
         float band = 4.0 * shadow * (1.0 - shadow);
         result *= lerp(1.0.xxx, hue, band * penumbraTint * weight);
