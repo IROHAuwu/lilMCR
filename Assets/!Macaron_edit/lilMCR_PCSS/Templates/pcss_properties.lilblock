@@ -11,9 +11,9 @@
         _lilMCRPCSS_PenumbraAlbedo ("PCSS Penumbra Uses Base Color", Range(0, 1)) = 1
         _lilMCRPCSS_PenumbraSaturation ("PCSS Penumbra Saturation", Range(0, 3)) = 2
         _lilMCRPCSS_BackShadow ("PCSS Shadow On Back Faces", Range(0, 1)) = 1
-        // 0 = PCSS (softer with distance), 1 = PCF (the same softness everywhere), 2 = sharp contact (HFTS-like look).
-        // All three read the same shadow map and use the same sliders.
-        [IntRange] _lilMCRPCSS_Mode ("PCSS Shadow Type (0 PCSS - 1 PCF - 2 Sharp Contact)", Range(0, 2)) = 0
+        // 0 = PCSS (softer with distance), 1 = PCF (the same softness everywhere).
+        // Both read the same shadow map and use the same sliders.
+        [IntRange] _lilMCRPCSS_Mode ("PCSS Shadow Type (0 PCSS - 1 PCF)", Range(0, 1)) = 0
         _lilMCRPCSS_LightSize ("Light Size (m)", Range(0, 0.5)) = 0.005
         _lilMCRPCSS_BlockerRange ("Blocker Search Range (m)", Range(0.05, 1.5)) = 0.5
         _lilMCRPCSS_MinBlur ("Minimum Blur (texels)", Range(0, 32)) = 3

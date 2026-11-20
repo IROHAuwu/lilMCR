@@ -102,13 +102,13 @@ namespace lilToon
             }
             if(name == "Mode" && p != null)
             {
-                // Three buttons: one click switches the shadow type, the sliders below stay as they are.
-                int current = Mathf.Clamp(Mathf.RoundToInt(p.floatValue), 0, 2);
+                // Two buttons: one click switches the shadow type, the sliders below stay as they are.
+                int current = Mathf.Clamp(Mathf.RoundToInt(p.floatValue), 0, 1);
                 EditorGUILayout.PrefixLabel(PcssText.S("影子類型"));
                 EditorGUI.BeginChangeCheck();
-                int next = GUILayout.Toolbar(p.hasMixedValue ? -1 : current, new[] { "PCSS", "PCF", PcssText.S("銳利接觸") });
+                int next = GUILayout.Toolbar(p.hasMixedValue ? -1 : current, new[] { "PCSS", "PCF" });
                 if(EditorGUI.EndChangeCheck() && next >= 0) p.floatValue = next;
-                EditorGUILayout.LabelField(PcssText.S("PCSS：離遮擋物越遠越柔和。PCF：整體同一個柔和度，最省效能。銳利接觸：貼近遮擋物是清楚的線，離遠才變柔（HFTS 風格）。三種共用同一張陰影貼圖和下面的拉桿。"), EditorStyles.wordWrappedMiniLabel);
+                EditorGUILayout.LabelField(PcssText.S("PCSS：離遮擋物越遠越柔和。PCF：整體同一個柔和度，較省效能。兩種共用同一張陰影貼圖和下面的拉桿。"), EditorStyles.wordWrappedMiniLabel);
                 return;
             }
             string zh;

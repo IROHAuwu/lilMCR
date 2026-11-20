@@ -46,7 +46,7 @@ namespace lilMCR.PCSS
                 new Row { Prop = "PenumbraColor", Label = "半影顏色（亮側）", Help = "影子邊緣靠近亮面那一側的色調。只取色相，不會讓畫面變亮。", Kind = Kind.Color },
                 new Row { Prop = "PenumbraColor2", Label = "半影顏色（影側）", Help = "影子邊緣靠近影子那一側的色調。只取色相，不會讓畫面變亮。", Kind = Kind.Color },
                 new Row { Prop = "BackShadow", Label = "背光面的影子", Help = "背對專用光源的面也加上影子。1 = 背光面也有影子，0 = 只在受光面顯示落影。", Kind = Kind.Slider },
-                new Row { Prop = "Mode", Label = "影子類型", Help = "PCSS：離遮擋物越遠越柔和。PCF：整體同一個柔和度，最省效能。銳利接觸：貼近遮擋物是清楚的線，離遠才變柔（HFTS 風格）。三種共用同一張陰影貼圖和下面的拉桿。", Kind = Kind.Type },
+                new Row { Prop = "Mode", Label = "影子類型", Help = "PCSS：離遮擋物越遠越柔和。PCF：整體同一個柔和度，較省效能。兩種共用同一張陰影貼圖和下面的拉桿。", Kind = Kind.Type },
                 new Row { Prop = "LightSize", Label = "柔和度（光源大小）", Help = "越小影子越銳利、越接近遮擋物的形狀；越大離遮擋物越遠的地方越模糊。", Kind = Kind.Slider },
                 new Row { Prop = "BlockerRange", Label = "遮擋物搜尋範圍", Kind = Kind.Slider },
                 new Row { Prop = "Quality", Label = "品質", Kind = Kind.IntSlider },
@@ -302,11 +302,11 @@ namespace lilMCR.PCSS
 
             if(r.Kind == Kind.Type)
             {
-                int v = Mathf.Clamp(Mathf.RoundToInt(ms[0].GetFloat(prop)), 0, 2);
+                int v = Mathf.Clamp(Mathf.RoundToInt(ms[0].GetFloat(prop)), 0, 1);
                 bool mixed = ms.Any(m => Mathf.RoundToInt(m.GetFloat(prop)) != v);
                 EditorGUILayout.PrefixLabel(label);
                 EditorGUI.BeginChangeCheck();
-                int n = GUILayout.Toolbar(mixed ? -1 : v, new[] { "PCSS", "PCF", PcssText.S("銳利接觸") });
+                int n = GUILayout.Toolbar(mixed ? -1 : v, new[] { "PCSS", "PCF" });
                 if(EditorGUI.EndChangeCheck() && n >= 0)
                 {
                     Undo.RecordObjects(ms.ToArray(), "lilMCR PCSS Batch");
