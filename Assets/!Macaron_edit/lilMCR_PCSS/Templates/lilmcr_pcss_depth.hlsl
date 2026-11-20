@@ -14,6 +14,8 @@
     float _lilMCRPCSS_AlbedoTint; \
     float _lilMCRPCSS_ShadowSaturation; \
     float _lilMCRPCSS_Strength; \
+    float4 _lilMCRPCSS_PenumbraColor; \
+    float _lilMCRPCSS_PenumbraTint; \
     float _lilMCRPCSS_BackShadow; \
     float _lilMCRPCSS_LightSize; \
     float _lilMCRPCSS_BlockerRange; \

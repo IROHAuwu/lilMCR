@@ -5,6 +5,8 @@
         _lilMCRPCSS_AlbedoTint ("PCSS Shadow Uses Base Color", Range(0, 1)) = 1
         _lilMCRPCSS_ShadowSaturation ("PCSS Shadow Saturation", Range(0, 3)) = 0.1
         _lilMCRPCSS_Strength ("PCSS Shadow Strength", Range(0, 1)) = 1
+        _lilMCRPCSS_PenumbraColor ("PCSS Penumbra Color", Color) = (1,0.45,0.35,1)
+        _lilMCRPCSS_PenumbraTint ("PCSS Penumbra Tint", Range(0, 1)) = 0
         _lilMCRPCSS_BackShadow ("PCSS Shadow On Back Faces", Range(0, 1)) = 1
         _lilMCRPCSS_LightSize ("Light Size (m)", Range(0, 0.5)) = 0.005
         _lilMCRPCSS_BlockerRange ("Blocker Search Range (m)", Range(0.05, 1.5)) = 0.5

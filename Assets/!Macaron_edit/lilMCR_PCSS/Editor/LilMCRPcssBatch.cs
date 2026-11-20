@@ -40,6 +40,8 @@ namespace lilMCR.PCSS
                 new Row { Prop = "AlbedoTint", Label = "沿用底色", Help = "影子帶上材質本身的顏色（色相），不會變成灰色。0 = 只用影子顏色。", Kind = Kind.Slider },
                 new Row { Prop = "ShadowSaturation", Label = "影子飽和度", Help = "影子顏色的飽和度。0 = 中性（只變暗，保留原本的顏色），1 = 沿用的顏色本身，越大越鮮豔。", Kind = Kind.Slider },
                 new Row { Prop = "Strength", Label = "影子強度", Kind = Kind.Slider },
+                new Row { Prop = "PenumbraTint", Label = "半影著色", Help = "影子邊緣（亮面與影子之間的過渡帶）染上半影顏色的程度。0 = 關閉。過渡帶越寬（柔和度越大、離遮擋物越遠）越明顯。", Kind = Kind.Slider },
+                new Row { Prop = "PenumbraColor", Label = "半影顏色", Help = "影子邊緣的色調。只取色相，不會讓畫面變亮。皮膚常用偏紅的暖色。", Kind = Kind.Color },
                 new Row { Prop = "BackShadow", Label = "背光面的影子", Help = "背對專用光源的面也加上影子。1 = 背光面也有影子，0 = 只在受光面顯示落影。", Kind = Kind.Slider },
                 new Row { Prop = "LightSize", Label = "柔和度（光源大小）", Help = "越小影子越銳利、越接近遮擋物的形狀；越大離遮擋物越遠的地方越模糊。", Kind = Kind.Slider },
                 new Row { Prop = "BlockerRange", Label = "遮擋物搜尋範圍", Kind = Kind.Slider },

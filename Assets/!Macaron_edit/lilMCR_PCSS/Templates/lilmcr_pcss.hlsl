@@ -646,14 +646,29 @@ float4 lmpFrag(lmpV2F input) : SV_Target
     float weight = LMP_Weight() * alpha * mask;
     [branch]
     if(weight <= 0.0) return float4(1.0, 1.0, 1.0, 1.0);
-    float amount = 0.0;
+    float shadow = 0.0;
 #if defined(LMP_ACTIVE)
-    amount = LMP_ShadowAmount(input.positionWS, input.normalWS) * weight;
+    shadow = LMP_ShadowAmount(input.positionWS, input.normalWS);
 #endif
+    float amount = shadow * weight;
     [branch]
     if(amount <= 0.0) return float4(1.0, 1.0, 1.0, 1.0);
     float3 shadowMul = LMP_ShadowMultiplier(saturate(baseColor.rgb));
-    return float4(lerp(1.0.xxx, shadowMul, amount), 1.0);
+    float3 result = lerp(1.0.xxx, shadowMul, amount);
+    // Penumbra tint: the band between light and shadow takes the hue of Penumbra Color (the warm edge of a shadow on
+    // skin). Strongest where the shadow is half way, nothing in full light or full shadow, so it is as wide as the
+    // penumbra itself: narrow next to the occluder, wide far from it. No extra shadow map read: it only reuses the
+    // shadow amount. The color is used as a hue (brightest channel = 1) and multiplied: no channel gets brighter.
+    float penumbraTint = saturate(_lilMCRPCSS_PenumbraTint);
+    [branch]
+    if(penumbraTint > 0.0)
+    {
+        float3 hue = saturate(_lilMCRPCSS_PenumbraColor.rgb);
+        hue /= max(max(hue.r, hue.g), max(hue.b, 1e-4));
+        float band = 4.0 * shadow * (1.0 - shadow);
+        result *= lerp(1.0.xxx, hue, band * penumbraTint * weight);
+    }
+    return float4(result, 1.0);
 }
 
 #endif
