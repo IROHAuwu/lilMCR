@@ -689,7 +689,8 @@ float4 lmpFrag(lmpV2F input) : SV_Target
     //     Use Base Color : 0 = the two chosen colors, 1 = the surface's own base color, in between = a mix of both.
     //     Saturation     : saturation of that result. 0 = neutral (no tint), 1 = as is, above 1 = more vivid: a pale
     //                      skin gives a clearly warm edge from its own color alone.
-    //   The result is used as a hue (brightest channel = 1) and multiplied: no channel gets brighter.
+    //   The result is used as a hue (brightest channel = 1) and multiplied: no channel gets brighter, and none gets
+    //   darker than the full shadow.
     float penumbraTint = saturate(_lilMCRPCSS_PenumbraTint);
     [branch]
     if(penumbraTint > 0.0)
@@ -703,7 +704,11 @@ float4 lmpFrag(lmpV2F input) : SV_Target
         // A black surface has no hue to give: no tint there.
         hue = hueMax > 1e-4 ? hue / hueMax : 1.0.xxx;
         float band = 4.0 * cast * (1.0 - cast) * fade;
-        result *= lerp(1.0.xxx, hue, band * penumbraTint * weight);
+        // The band never gets darker than the shadow itself: on a vivid base color the hue has channels near 0, and
+        // multiplying by it would draw a dark outline around the shadow. Each channel stops at the value this pixel
+        // has in full shadow (and never rises above the untinted result).
+        float3 full = min(result, lerp(1.0.xxx, shadowMul, fade * weight));
+        result = max(result * lerp(1.0.xxx, hue, band * penumbraTint * weight), full);
     }
     return float4(result, 1.0);
 }
