@@ -784,6 +784,8 @@ namespace liltoon_MCR
             T("_lilMCRPCSS_MaxLevel", 0.0005f, 0f, 0f, 0f),
             T("_lilMCRPCSS_MinBlur", 2f, 0f, 0f, 0f),
             T("_lilMCRPCSS_NormalBias", 4f, 0f, 0f, 0f),
+            T("_lilMCRPCSS_PenumbraAlbedo", 1f, 0f, 0f, 0f),
+            T("_lilMCRPCSS_PenumbraSaturation", 1.5f, 0f, 0f, 0f),
             T("_lilMCRPCSS_Quality", 1f, 0f, 0f, 0f),
             T("_lilMCRPCSS_ShadowSaturation", 0.1f, 0f, 0f, 0f),
             T("_lilMCRPCSS_Strength", 1f, 0f, 0f, 0f),
