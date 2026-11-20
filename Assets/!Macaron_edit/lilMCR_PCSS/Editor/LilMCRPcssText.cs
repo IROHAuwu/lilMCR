@@ -37,7 +37,7 @@ namespace lilMCR.PCSS
         private static readonly Dictionary<string, string[]> Table = new Dictionary<string, string[]>
         {
             { "一鍵套用品質檔次", new[] { "One-click quality tier", "品質プリセットを一括適用", "품질 프리셋 한 번에 적용" } },
-            { "柔和度為 0 時，只使用最小模糊，寬度不隨遮擋物距離改變；大於 0 時啟用距離相關柔影。最小模糊以陰影貼圖像素計算。", new[] { "With Softness 0 only the minimum blur is used and its width does not change with the occluder distance; above 0 the distance-dependent soft shadow is enabled. The minimum blur is measured in shadow map texels.", "柔らかさが 0 のときは最小ぼかしだけを使い、幅は遮蔽物までの距離で変わりません。0 より大きいと距離に応じた柔らかい影になります。最小ぼかしはシャドウマップのテクセル単位です。", "부드러움이 0이면 최소 블러만 사용하며 폭은 차폐물 거리에 따라 바뀌지 않습니다. 0보다 크면 거리에 따른 부드러운 그림자가 켜집니다. 최소 블러는 그림자 맵 텍셀 단위입니다." } },
+            { "PCSS：柔和度為 0 時只使用最小模糊；大於 0 時離遮擋物越遠越柔。PCF：柔和度是整體固定的寬度（相當於 PCSS 在遮擋物距離 0.1 m 時），不使用遮擋物搜尋範圍。最小模糊以陰影貼圖像素計算。", new[] { "PCSS: with Softness 0 only the minimum blur is used; above 0 the shadow gets softer the further it is from the occluder. PCF: Softness is one fixed width everywhere (what PCSS gives an occluder 0.1 m away) and the Blocker Search Range is not used. Minimum blur is in shadow map texels.", "PCSS：柔らかさが 0 のときは最小ぼかしのみ、0 より大きいと遮蔽物から離れるほど柔らかくなります。PCF：柔らかさは全体で一定の幅（PCSS で遮蔽物が 0.1 m 離れているときの幅）になり、遮蔽物の探索範囲は使いません。最小ぼかしはシャドウマップのテクセル単位です。", "PCSS: 부드러움이 0이면 최소 블러만 사용하고, 0보다 크면 가리는 물체에서 멀수록 부드러워집니다. PCF: 부드러움은 전체에 고정된 폭(PCSS에서 가리는 물체가 0.1 m 떨어졌을 때의 폭)이며 차폐물 탐색 범위는 사용하지 않습니다. 최소 블러는 섀도 맵 텍셀 단위입니다." } },
             // Shared self-shadow setting (Setup, Batch and material inspector).
             { "僅自身陰影", new[] { "Self Shadows Only", "自身の影のみ", "자신의 그림자만" } },
             { "角色共用：修改此項會同步所有 PCSS 材質。",
@@ -116,6 +116,19 @@ namespace lilMCR.PCSS
             { "沿用底色", new[] { "Use base color", "下地の色を使う", "베이스 색 사용" } },
             { "影子帶上材質本身的顏色（色相），不會變成灰色。0 = 只用影子顏色。", new[] { "The shadow takes the material's own color (hue) instead of turning gray. 0 = shadow color only.", "影にマテリアル自身の色（色相）を乗せ、灰色になりません。0 = 影の色のみ。", "그림자에 머티리얼 자체의 색 (색상)을 입혀 회색이 되지 않게 합니다. 0 = 그림자 색만 사용." } },
             { "影子飽和度", new[] { "Shadow saturation", "影の彩度", "그림자 채도" } },
+            { "PCF（輕量）", new[] { "PCF (light)", "PCF（軽量）", "PCF (경량)" } },
+            { "影子類型", new[] { "Shadow type", "影の種類", "그림자 종류" } },
+            { "PCSS：離遮擋物越遠越柔和。PCF：整體同一個柔和度，較省效能。兩種共用同一張陰影貼圖和下面的拉桿。", new[] { "PCSS: softer the further from the occluder. PCF: the same softness everywhere, cheaper. Both share the shadow map and the sliders below.", "PCSS：遮蔽物から離れるほど柔らかくなります。PCF：全体が同じ柔らかさで、より軽量です。どちらも同じシャドウマップと下のスライダーを共用します。", "PCSS: 가리는 물체에서 멀수록 부드러워집니다. PCF: 전체가 같은 부드러움으로 더 가볍습니다. 둘 다 같은 섀도 맵과 아래 슬라이더를 공유합니다." } },
+            { "半影著色", new[] { "Penumbra tint", "半影の色付け", "반그림자 색 입히기" } },
+            { "半影沿用底色", new[] { "Penumbra uses base color", "半影に下地の色を使う", "반그림자에 베이스 색 사용" } },
+            { "半影飽和度", new[] { "Penumbra saturation", "半影の彩度", "반그림자 채도" } },
+            { "半影的顏色來源。1 = 只用材質本身的底色，0 = 只用下面兩個自選顏色，中間 = 兩者混合。", new[] { "Where the penumbra color comes from. 1 = the material's own base color only, 0 = the two chosen colors below only, in between = a mix of both.", "半影の色の元。1 = マテリアル自身の下地の色のみ、0 = 下の 2 つの指定色のみ、その間 = 両方の混合。", "반그림자 색의 출처. 1 = 머티리얼 자체의 베이스 색만, 0 = 아래의 두 지정 색만, 그 사이 = 둘의 혼합." } },
+            { "半影顏色的飽和度。0 = 中性（不染色），1 = 顏色本身，越大越鮮豔。只用底色時調高這個值，邊緣的色調才會明顯。", new[] { "Saturation of the penumbra color. 0 = neutral (no tint), 1 = the color as is; higher = more vivid. With the base color only, raise this to make the edge's hue show.", "半影の色の彩度。0 = 無彩色（色が付かない）、1 = 色そのまま、大きいほど鮮やか。下地の色だけを使う場合は、この値を上げると縁の色合いがはっきりします。", "반그림자 색의 채도. 0 = 무채색(색이 입혀지지 않음), 1 = 색 그대로, 클수록 선명함. 베이스 색만 쓸 때는 이 값을 올려야 가장자리 색조가 잘 보입니다." } },
+            { "半影顏色（亮側）", new[] { "Penumbra color (light side)", "半影の色（明るい側）", "반그림자 색 (밝은 쪽)" } },
+            { "半影顏色（影側）", new[] { "Penumbra color (shadow side)", "半影の色（影側）", "반그림자 색 (그림자 쪽)" } },
+            { "影子邊緣（亮面與影子之間的過渡帶）染上半影顏色的程度。0 = 關閉。過渡帶越寬（柔和度越大、離遮擋物越遠）越明顯。", new[] { "How much the edge of the shadow (the band between light and shadow) takes the penumbra color. 0 = off. The wider the band (more softness, further from the occluder), the more it shows.", "影の縁（明るい面と影のあいだの帯）に半影の色を乗せる強さ。0 = オフ。帯が広いほど（柔らかさが大きい、遮蔽物から遠い）はっきり見えます。", "그림자 가장자리(밝은 면과 그림자 사이의 띠)에 반그림자 색을 입히는 정도. 0 = 끔. 띠가 넓을수록(부드러움이 크거나 가리는 물체에서 멀수록) 잘 보입니다." } },
+            { "影子邊緣靠近亮面那一側的色調。只取色相，不會讓畫面變亮。", new[] { "Hue of the shadow's edge on the side of the light. Only the hue is used: nothing gets brighter.", "影の縁の、明るい面に近い側の色合い。色相だけを使い、明るくはなりません。", "그림자 가장자리 중 밝은 면에 가까운 쪽의 색조. 색상만 사용하며 밝아지지는 않습니다." } },
+            { "影子邊緣靠近影子那一側的色調。只取色相，不會讓畫面變亮。", new[] { "Hue of the shadow's edge on the side of the shadow. Only the hue is used: nothing gets brighter.", "影の縁の、影に近い側の色合い。色相だけを使い、明るくはなりません。", "그림자 가장자리 중 그림자에 가까운 쪽의 색조. 색상만 사용하며 밝아지지는 않습니다." } },
             { "影子顏色的飽和度。0 = 中性（只變暗，保留原本的顏色），1 = 沿用的顏色本身，越大越鮮豔。", new[] { "Saturation of the shadow color. 0 = neutral (only darkens, the surface keeps its own color), 1 = the color as is; higher = more vivid.", "影の色の彩度。0 = ニュートラル（暗くするだけで元の色を保つ）、1 = 色そのまま、大きいほど鮮やかになります。", "그림자 색의 채도. 0 = 중립 (어둡게만 하고 원래 색 유지), 1 = 색 그대로, 클수록 선명해집니다." } },
             { "落影處乘上的顏色（亮度與色調）。越暗影子越深。", new[] { "Color multiplied into the cast shadow (brightness and tone). Darker = deeper shadows.", "落ち影に乗算する色（明るさと色調）。暗いほど影が濃くなります。", "그림자가 지는 곳에 곱하는 색 (밝기와 색조). 어두울수록 그림자가 진해집니다." } },
             { "照射範圍", new[] { "Coverage", "照射範囲", "조사 범위" } },

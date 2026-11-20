@@ -70,7 +70,7 @@ namespace lilToon
 
         private static readonly Dictionary<string, string> Labels = new Dictionary<string, string>
         {
-            { "SelfOnly", "僅自身陰影" }, { "ShadowColor", "影子顏色" }, { "AlbedoTint", "沿用底色" }, { "ShadowSaturation", "影子飽和度" }, { "BackShadow", "背光面的影子" }, { "Strength", "影子強度" }, { "LightSize", "柔和度（光源大小）" },
+            { "SelfOnly", "僅自身陰影" }, { "ShadowColor", "影子顏色" }, { "AlbedoTint", "沿用底色" }, { "ShadowSaturation", "影子飽和度" }, { "BackShadow", "背光面的影子" }, { "Strength", "影子強度" }, { "PenumbraTint", "半影著色" }, { "PenumbraAlbedo", "半影沿用底色" }, { "PenumbraSaturation", "半影飽和度" }, { "PenumbraColor", "半影顏色（亮側）" }, { "PenumbraColor2", "半影顏色（影側）" }, { "LightSize", "柔和度（光源大小）" },
             { "BlockerRange", "遮擋物搜尋範圍" }, { "Quality", "品質" }, { "MinBlur", "最小模糊" },
             { "NormalBias", "法線偏移" }, { "DepthBias", "深度偏移" }, { "ConeEdge", "光錐邊緣柔和度" },
         };
@@ -100,8 +100,26 @@ namespace lilToon
                 EditorGUILayout.LabelField(PcssText.S("角色共用：修改此項會同步所有 PCSS 材質。"), EditorStyles.wordWrappedMiniLabel);
                 return;
             }
+            if(name == "Mode" && p != null)
+            {
+                // Two buttons: one click switches the shadow type, the sliders below stay as they are.
+                int current = Mathf.Clamp(Mathf.RoundToInt(p.floatValue), 0, 1);
+                EditorGUILayout.BeginHorizontal();
+                EditorGUILayout.PrefixLabel(PcssText.S("影子類型"));
+                EditorGUI.BeginChangeCheck();
+                int next = GUILayout.Toolbar(p.hasMixedValue ? -1 : current, new[] { "PCSS", PcssText.S("PCF（輕量）") });
+                if(EditorGUI.EndChangeCheck() && next >= 0) p.floatValue = next;
+                EditorGUILayout.EndHorizontal();
+                EditorGUILayout.LabelField(PcssText.S("PCSS：離遮擋物越遠越柔和。PCF：整體同一個柔和度，較省效能。兩種共用同一張陰影貼圖和下面的拉桿。"), EditorStyles.wordWrappedMiniLabel);
+                return;
+            }
             string zh;
-            if(p != null) m_MaterialEditor.ShaderProperty(p, Labels.TryGetValue(name, out zh) ? PcssText.S(zh) : p.displayName);
+            // PCF has no blocker search: the range is not used there.
+            MaterialProperty type = name == "BlockerRange" ? P("Mode") : null;
+            using(new EditorGUI.DisabledScope(type != null && !type.hasMixedValue && type.floatValue > 0.5f))
+            {
+                if(p != null) m_MaterialEditor.ShaderProperty(p, Labels.TryGetValue(name, out zh) ? PcssText.S(zh) : p.displayName);
+            }
             if(name == "DepthBias" && p != null)
                 EditorGUILayout.LabelField(PcssText.S("基礎偏移為 0.002 m；此值為額外偏移，0 即使用基礎值。條紋出現時調高，影子分離時調低。"), EditorStyles.wordWrappedMiniLabel);
         }
@@ -160,9 +178,15 @@ namespace lilToon
                                 Row("ShadowColor");
                                 Row("AlbedoTint");
                                 Row("ShadowSaturation");
+                                Row("PenumbraTint");
+                                Row("PenumbraAlbedo");
+                                Row("PenumbraSaturation");
+                                Row("PenumbraColor");
+                                Row("PenumbraColor2");
                                 Row("BackShadow");
+                                Row("Mode");
                                 Row("LightSize");
-                                EditorGUILayout.LabelField(PcssText.S("柔和度為 0 時，只使用最小模糊，寬度不隨遮擋物距離改變；大於 0 時啟用距離相關柔影。最小模糊以陰影貼圖像素計算。"), EditorStyles.wordWrappedMiniLabel);
+                                EditorGUILayout.LabelField(PcssText.S("PCSS：柔和度為 0 時只使用最小模糊；大於 0 時離遮擋物越遠越柔。PCF：柔和度是整體固定的寬度（相當於 PCSS 在遮擋物距離 0.1 m 時），不使用遮擋物搜尋範圍。最小模糊以陰影貼圖像素計算。"), EditorStyles.wordWrappedMiniLabel);
                                 Row("BlockerRange");
                                 Row("Quality");
                                 Row("MinBlur");

@@ -13,7 +13,7 @@ namespace lilMCR.PCSS
     /// </summary>
     public class LilMCRPcssBatch : EditorWindow
     {
-        private enum Kind { Color, Slider, IntSlider }
+        private enum Kind { Color, Slider, IntSlider, Type }
 
         private struct Row
         {
@@ -40,7 +40,13 @@ namespace lilMCR.PCSS
                 new Row { Prop = "AlbedoTint", Label = "沿用底色", Help = "影子帶上材質本身的顏色（色相），不會變成灰色。0 = 只用影子顏色。", Kind = Kind.Slider },
                 new Row { Prop = "ShadowSaturation", Label = "影子飽和度", Help = "影子顏色的飽和度。0 = 中性（只變暗，保留原本的顏色），1 = 沿用的顏色本身，越大越鮮豔。", Kind = Kind.Slider },
                 new Row { Prop = "Strength", Label = "影子強度", Kind = Kind.Slider },
+                new Row { Prop = "PenumbraTint", Label = "半影著色", Help = "影子邊緣（亮面與影子之間的過渡帶）染上半影顏色的程度。0 = 關閉。過渡帶越寬（柔和度越大、離遮擋物越遠）越明顯。", Kind = Kind.Slider },
+                new Row { Prop = "PenumbraAlbedo", Label = "半影沿用底色", Help = "半影的顏色來源。1 = 只用材質本身的底色，0 = 只用下面兩個自選顏色，中間 = 兩者混合。", Kind = Kind.Slider },
+                new Row { Prop = "PenumbraSaturation", Label = "半影飽和度", Help = "半影顏色的飽和度。0 = 中性（不染色），1 = 顏色本身，越大越鮮豔。只用底色時調高這個值，邊緣的色調才會明顯。", Kind = Kind.Slider },
+                new Row { Prop = "PenumbraColor", Label = "半影顏色（亮側）", Help = "影子邊緣靠近亮面那一側的色調。只取色相，不會讓畫面變亮。", Kind = Kind.Color },
+                new Row { Prop = "PenumbraColor2", Label = "半影顏色（影側）", Help = "影子邊緣靠近影子那一側的色調。只取色相，不會讓畫面變亮。", Kind = Kind.Color },
                 new Row { Prop = "BackShadow", Label = "背光面的影子", Help = "背對專用光源的面也加上影子。1 = 背光面也有影子，0 = 只在受光面顯示落影。", Kind = Kind.Slider },
+                new Row { Prop = "Mode", Label = "影子類型", Help = "PCSS：離遮擋物越遠越柔和。PCF：整體同一個柔和度，較省效能。兩種共用同一張陰影貼圖和下面的拉桿。", Kind = Kind.Type },
                 new Row { Prop = "LightSize", Label = "柔和度（光源大小）", Help = "越小影子越銳利、越接近遮擋物的形狀；越大離遮擋物越遠的地方越模糊。", Kind = Kind.Slider },
                 new Row { Prop = "BlockerRange", Label = "遮擋物搜尋範圍", Kind = Kind.Slider },
                 new Row { Prop = "Quality", Label = "品質", Kind = Kind.IntSlider },
@@ -171,7 +177,7 @@ namespace lilMCR.PCSS
 
             GUILayout.Space(4f);
             LilMCRPcssSetup.PreviewButton(avatar);
-            EditorGUILayout.LabelField(PcssText.S("柔和度為 0 時，只使用最小模糊，寬度不隨遮擋物距離改變；大於 0 時啟用距離相關柔影。最小模糊以陰影貼圖像素計算。"), EditorStyles.wordWrappedMiniLabel);
+            EditorGUILayout.LabelField(PcssText.S("PCSS：柔和度為 0 時只使用最小模糊；大於 0 時離遮擋物越遠越柔。PCF：柔和度是整體固定的寬度（相當於 PCSS 在遮擋物距離 0.1 m 時），不使用遮擋物搜尋範圍。最小模糊以陰影貼圖像素計算。"), EditorStyles.wordWrappedMiniLabel);
             DrawMaterials(all);
             List<Material> targets = Targets(all);
 
@@ -294,7 +300,23 @@ namespace lilMCR.PCSS
             int idx = shader.FindPropertyIndex(prop);
             GUIContent label = new GUIContent(PcssText.S(r.Label), r.Help != null ? PcssText.S(r.Help) : null);
 
-            if(r.Kind == Kind.Color)
+            if(r.Kind == Kind.Type)
+            {
+                int v = Mathf.Clamp(Mathf.RoundToInt(ms[0].GetFloat(prop)), 0, 1);
+                bool mixed = ms.Any(m => Mathf.RoundToInt(m.GetFloat(prop)) != v);
+                EditorGUILayout.BeginHorizontal();
+                EditorGUILayout.PrefixLabel(label);
+                EditorGUI.BeginChangeCheck();
+                int n = GUILayout.Toolbar(mixed ? -1 : v, new[] { "PCSS", PcssText.S("PCF（輕量）") });
+                bool changed = EditorGUI.EndChangeCheck();
+                EditorGUILayout.EndHorizontal();
+                if(changed && n >= 0)
+                {
+                    Undo.RecordObjects(ms.ToArray(), "lilMCR PCSS Batch");
+                    foreach(Material m in ms) { m.SetFloat(prop, n); EditorUtility.SetDirty(m); }
+                }
+            }
+            else if(r.Kind == Kind.Color)
             {
                 Color c = ms[0].GetColor(prop);
                 EditorGUI.showMixedValue = ms.Any(m => m.GetColor(prop) != c);
@@ -313,12 +335,17 @@ namespace lilMCR.PCSS
                 if(idx >= 0 && shader.GetPropertyType(idx) == UnityEngine.Rendering.ShaderPropertyType.Range) lim = shader.GetPropertyRangeLimits(idx);
                 float v = ms[0].GetFloat(prop);
                 EditorGUI.showMixedValue = ms.Any(m => !Mathf.Approximately(m.GetFloat(prop), v));
+                // PCF has no blocker search: the range is not used when every target is PCF.
+                bool unused = r.Prop == "BlockerRange" && ms.All(m => m.HasProperty(Prefix + "Mode") && m.GetFloat(Prefix + "Mode") > 0.5f);
+                EditorGUI.BeginDisabledGroup(unused);
                 EditorGUI.BeginChangeCheck();
                 float n = r.Kind == Kind.IntSlider
                     ? EditorGUILayout.IntSlider(label, Mathf.RoundToInt(v), Mathf.RoundToInt(lim.x), Mathf.RoundToInt(lim.y))
                     : EditorGUILayout.Slider(label, v, lim.x, lim.y);
+                bool edited = EditorGUI.EndChangeCheck();
+                EditorGUI.EndDisabledGroup();
                 EditorGUI.showMixedValue = false;
-                if(EditorGUI.EndChangeCheck())
+                if(edited)
                 {
                     Undo.RecordObjects(ms.ToArray(), "lilMCR PCSS Batch");
                     foreach(Material m in ms) { m.SetFloat(prop, n); EditorUtility.SetDirty(m); }

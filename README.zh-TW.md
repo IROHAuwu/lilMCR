@@ -4,7 +4,7 @@
 
 **以 lilToon 為基礎的 VRChat 角色著色器與工具組**
 
-![version](https://img.shields.io/badge/version-v1.5.6-ff8fab)
+![version](https://img.shields.io/badge/version-v1.5.7-ff8fab)
 ![lilToon](https://img.shields.io/badge/lilToon-2.x-8ecae6)
 ![platform](https://img.shields.io/badge/VRChat-Avatar-b8a1ff)
 ![UI](https://img.shields.io/badge/UI-繁中%20%7C%20English%20%7C%20日本語%20%7C%20한국어-lightgrey)
@@ -43,7 +43,7 @@ lilMCR（Macaron）是 [lilToon](https://github.com/lilxyzw/lilToon) 2.x 的自�
 ### 附加元件
 | 資料夾 | 說明 |
 |---|---|
-| **lilMCR PCSS** | PCSS 軟陰影（距離越遠越柔和的陰影）。選單：`Macaron/lilMCR PCSS` |
+| **lilMCR PCSS** | PCSS 軟陰影（距離越遠越柔和的陰影），可切換成 PCF（輕量），並可用底色為影子邊緣著色（半影著色）。選單：`Macaron/lilMCR PCSS` |
 | **lilMCR Param Compressor** | 上傳時若同步參數超過 VRChat 上限，自動壓縮；未超過則完全不更動 |
 
 附加元件都是獨立資料夾，不需要的可以直接刪除。

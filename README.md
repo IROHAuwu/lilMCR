@@ -4,7 +4,7 @@
 
 **A lilToon-based avatar shader and toolset for VRChat**
 
-![version](https://img.shields.io/badge/version-v1.5.6-ff8fab)
+![version](https://img.shields.io/badge/version-v1.5.7-ff8fab)
 ![lilToon](https://img.shields.io/badge/lilToon-2.x-8ecae6)
 ![platform](https://img.shields.io/badge/VRChat-Avatar-b8a1ff)
 ![UI](https://img.shields.io/badge/UI-English%20%7C%20繁中%20%7C%20日本語%20%7C%20한국어-lightgrey)
@@ -43,7 +43,7 @@ Found under **`Macaron`** in the Unity menu bar.
 ### Add-ons
 | Folder | Description |
 |---|---|
-| **lilMCR PCSS** | Percentage-closer soft shadows: shadows get softer the farther they are from the caster. Menu: `Macaron/lilMCR PCSS` |
+| **lilMCR PCSS** | Percentage-closer soft shadows: shadows get softer the farther they are from the caster, with an optional PCF (light) type and a penumbra tint taken from the base color. Menu: `Macaron/lilMCR PCSS` |
 | **lilMCR Param Compressor** | Compresses synced parameters at upload when they exceed VRChat's limit. Avatars within the limit are not changed |
 
 Each add-on is a separate folder. Delete the ones you don't need.
