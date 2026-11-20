@@ -41,6 +41,8 @@ namespace lilMCR.PCSS
                 new Row { Prop = "ShadowSaturation", Label = "影子飽和度", Help = "影子顏色的飽和度。0 = 中性（只變暗，保留原本的顏色），1 = 沿用的顏色本身，越大越鮮豔。", Kind = Kind.Slider },
                 new Row { Prop = "Strength", Label = "影子強度", Kind = Kind.Slider },
                 new Row { Prop = "PenumbraTint", Label = "半影著色", Help = "影子邊緣（亮面與影子之間的過渡帶）染上半影顏色的程度。0 = 關閉。過渡帶越寬（柔和度越大、離遮擋物越遠）越明顯。", Kind = Kind.Slider },
+                new Row { Prop = "PenumbraAlbedo", Label = "半影沿用底色", Help = "半影的顏色來源。1 = 只用材質本身的底色，0 = 只用下面兩個自選顏色，中間 = 兩者混合。", Kind = Kind.Slider },
+                new Row { Prop = "PenumbraSaturation", Label = "半影飽和度", Help = "半影顏色的飽和度。0 = 中性（不染色），1 = 顏色本身，越大越鮮豔。只用底色時調高這個值，邊緣的色調才會明顯。", Kind = Kind.Slider },
                 new Row { Prop = "PenumbraColor", Label = "半影顏色（亮側）", Help = "影子邊緣靠近亮面那一側的色調。只取色相，不會讓畫面變亮。", Kind = Kind.Color },
                 new Row { Prop = "PenumbraColor2", Label = "半影顏色（影側）", Help = "影子邊緣靠近影子那一側的色調。只取色相，不會讓畫面變亮。", Kind = Kind.Color },
                 new Row { Prop = "BackShadow", Label = "背光面的影子", Help = "背對專用光源的面也加上影子。1 = 背光面也有影子，0 = 只在受光面顯示落影。", Kind = Kind.Slider },

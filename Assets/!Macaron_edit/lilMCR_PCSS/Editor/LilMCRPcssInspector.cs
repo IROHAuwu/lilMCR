@@ -70,7 +70,7 @@ namespace lilToon
 
         private static readonly Dictionary<string, string> Labels = new Dictionary<string, string>
         {
-            { "SelfOnly", "僅自身陰影" }, { "ShadowColor", "影子顏色" }, { "AlbedoTint", "沿用底色" }, { "ShadowSaturation", "影子飽和度" }, { "BackShadow", "背光面的影子" }, { "Strength", "影子強度" }, { "PenumbraTint", "半影著色" }, { "PenumbraColor", "半影顏色（亮側）" }, { "PenumbraColor2", "半影顏色（影側）" }, { "LightSize", "柔和度（光源大小）" },
+            { "SelfOnly", "僅自身陰影" }, { "ShadowColor", "影子顏色" }, { "AlbedoTint", "沿用底色" }, { "ShadowSaturation", "影子飽和度" }, { "BackShadow", "背光面的影子" }, { "Strength", "影子強度" }, { "PenumbraTint", "半影著色" }, { "PenumbraAlbedo", "半影沿用底色" }, { "PenumbraSaturation", "半影飽和度" }, { "PenumbraColor", "半影顏色（亮側）" }, { "PenumbraColor2", "半影顏色（影側）" }, { "LightSize", "柔和度（光源大小）" },
             { "BlockerRange", "遮擋物搜尋範圍" }, { "Quality", "品質" }, { "MinBlur", "最小模糊" },
             { "NormalBias", "法線偏移" }, { "DepthBias", "深度偏移" }, { "ConeEdge", "光錐邊緣柔和度" },
         };
@@ -161,6 +161,8 @@ namespace lilToon
                                 Row("AlbedoTint");
                                 Row("ShadowSaturation");
                                 Row("PenumbraTint");
+                                Row("PenumbraAlbedo");
+                                Row("PenumbraSaturation");
                                 Row("PenumbraColor");
                                 Row("PenumbraColor2");
                                 Row("BackShadow");

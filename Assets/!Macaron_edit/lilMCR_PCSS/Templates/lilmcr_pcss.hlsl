@@ -676,13 +676,23 @@ float4 lmpFrag(lmpV2F input) : SV_Target
     //   The band is strongest where the shadow is half way and gone in full light and full shadow, so it is exactly
     //   as wide as the penumbra: thin next to the occluder, wide far from it. It reuses the shadow amount: no extra
     //   shadow map read, a few multiplications, skipped entirely at 0.
-    //   The colors are used as hues (brightest channel = 1) and multiplied: no channel gets brighter.
+    //   Where the color comes from is a blend, every step of it a slider (no switch):
+    //     Use Base Color : 0 = the two chosen colors, 1 = the surface's own base color, in between = a mix of both.
+    //     Saturation     : saturation of that result. 0 = neutral (no tint), 1 = as is, above 1 = more vivid: a pale
+    //                      skin gives a clearly warm edge from its own color alone.
+    //   The result is used as a hue (brightest channel = 1) and multiplied: no channel gets brighter.
     float penumbraTint = saturate(_lilMCRPCSS_PenumbraTint);
     [branch]
     if(penumbraTint > 0.0)
     {
-        float3 hue = lerp(saturate(_lilMCRPCSS_PenumbraColor.rgb), saturate(_lilMCRPCSS_PenumbraColor2.rgb), smoothstep(0.25, 0.75, shadow));
-        hue /= max(max(hue.r, hue.g), max(hue.b, 1e-4));
+        float3 albedo = saturate(baseColor.rgb);
+        float3 chosen = lerp(saturate(_lilMCRPCSS_PenumbraColor.rgb), saturate(_lilMCRPCSS_PenumbraColor2.rgb), smoothstep(0.25, 0.75, shadow));
+        float3 hue = lerp(chosen, albedo, saturate(_lilMCRPCSS_PenumbraAlbedo));
+        float hueL = dot(hue, float3(0.2126, 0.7152, 0.0722));
+        hue = max(lerp(hueL.xxx, hue, max(_lilMCRPCSS_PenumbraSaturation, 0.0)), 0.0);
+        float hueMax = max(max(hue.r, hue.g), hue.b);
+        // A black surface has no hue to give: no tint there.
+        hue = hueMax > 1e-4 ? hue / hueMax : 1.0.xxx;
         float band = 4.0 * shadow * (1.0 - shadow);
         result *= lerp(1.0.xxx, hue, band * penumbraTint * weight);
     }

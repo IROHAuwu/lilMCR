@@ -8,6 +8,8 @@
         _lilMCRPCSS_PenumbraColor ("PCSS Penumbra Color (light side)", Color) = (1,0.6,0.4,1)
         _lilMCRPCSS_PenumbraColor2 ("PCSS Penumbra Color 2 (shadow side)", Color) = (0.85,0.35,0.5,1)
         _lilMCRPCSS_PenumbraTint ("PCSS Penumbra Tint", Range(0, 1)) = 0
+        _lilMCRPCSS_PenumbraAlbedo ("PCSS Penumbra Uses Base Color", Range(0, 1)) = 1
+        _lilMCRPCSS_PenumbraSaturation ("PCSS Penumbra Saturation", Range(0, 3)) = 2
         _lilMCRPCSS_BackShadow ("PCSS Shadow On Back Faces", Range(0, 1)) = 1
         _lilMCRPCSS_LightSize ("Light Size (m)", Range(0, 0.5)) = 0.005
         _lilMCRPCSS_BlockerRange ("Blocker Search Range (m)", Range(0.05, 1.5)) = 0.5
