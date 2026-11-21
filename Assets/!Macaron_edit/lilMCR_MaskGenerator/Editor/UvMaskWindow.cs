@@ -527,7 +527,9 @@ namespace LilMCR.MaskGenerator
                 var importer = (TextureImporter)AssetImporter.GetAtPath(path);
                 importer.textureType = TextureImporterType.Default; importer.sRGBTexture = false;
                 importer.alphaSource = TextureImporterAlphaSource.None;
-                importer.textureCompression = TextureImporterCompression.Uncompressed;
+                // The shaders read the red channel only. High quality compression (BC7 on PC) keeps the black / white
+                // preview and the antialiased edges at a quarter of the memory of uncompressed RGBA32.
+                importer.textureCompression = TextureImporterCompression.CompressedHQ;
                 importer.maxTextureSize = size; importer.mipmapEnabled = true;
                 // The shaders sample masks with lilToon's shared repeat sampler; match it so preview and result agree.
                 importer.wrapMode = TextureWrapMode.Repeat; importer.filterMode = FilterMode.Bilinear;

@@ -18,7 +18,7 @@ namespace lilMCR.PCSS
     ///  - its cookie carries the lilMCR signature and a per-avatar light ID (1..511, three base-8 digits in the corners);
     ///    the avatar's materials store the same ID, so another lilMCR avatar's light nearby is ignored.
     ///  - culling mask Player / PlayerLocal / MirrorReflection. Default (the avatar in the Unity editor) only with
-    ///    "Editor preview", which Apply turns off again.
+    ///    "Editor preview", which Apply turns off again and which is never uploaded (LilMCRPcssBuildHook).
     ///  - the shadow is an extra multiply pass: it only darkens what Macaron drew; without the light nothing changes.
     /// </summary>
     public static class LilMCRPcssSetup
@@ -43,7 +43,7 @@ namespace lilMCR.PCSS
             string label = on ? PcssText.S("編輯器預覽：開（點擊關閉）") : PcssText.S("編輯器預覽：關（點擊在 Unity 中預覽影子）");
             if(GUILayout.Button(label, GUILayout.Height(30f))) SetEditorPreview(avatar, !on);
             GUI.backgroundColor = bg;
-            EditorGUILayout.LabelField(PcssText.S("開啟後光源也會作用在 Default 圖層（Unity 編輯器中的角色）。關閉統一調整視窗或按「套用」時會自動關閉。"), EditorStyles.wordWrappedMiniLabel);
+            EditorGUILayout.LabelField(PcssText.S("開啟後光源也會作用在 Default 圖層（Unity 編輯器中的角色）。關閉統一調整視窗或按「套用」時會自動關閉；上傳的角色不會帶有這個設定。"), EditorStyles.wordWrappedMiniLabel);
         }
 
         // Cookie layout: must match lilmcr_pcss.hlsl (LMP_UV_*).
@@ -471,6 +471,27 @@ namespace lilMCR.PCSS
             Undo.RecordObject(l, "lilMCR PCSS Editor Preview");
             l.cullingMask = on ? (l.cullingMask | DefaultLayerBit) : (l.cullingMask & ~DefaultLayerBit);
             EditorUtility.SetDirty(l);
+        }
+
+        /// <summary>For the avatar that is being built (a copy): the light keeps the runtime layers only, without Undo.
+        /// Every lilMCR PCSS light under the avatar is covered. Returns true when the preview was on.</summary>
+        public static bool ClearEditorPreviewForBuild(GameObject avatar)
+        {
+            if(avatar == null) return false;
+            bool cleared = false;
+            foreach(Light l in avatar.GetComponentsInChildren<Light>(true))
+            {
+                if((l.cullingMask & DefaultLayerBit) == 0) continue;
+                Transform t = l.transform;
+                // By the cookie (the light may have been moved or renamed by a build tool), or by the rig's name.
+                bool ours = l.cookie != null && l.cookie.name.StartsWith(CookiePrefix, StringComparison.Ordinal);
+                for(; !ours && t != null && t != avatar.transform.parent; t = t.parent)
+                    if(t.name == RigName) { ours = true; break; }
+                if(!ours) continue;
+                l.cullingMask &= ~DefaultLayerBit;
+                cleared = true;
+            }
+            return cleared;
         }
 
         private static int LayerOr(string name, int fallback)
