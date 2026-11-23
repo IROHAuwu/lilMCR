@@ -435,7 +435,7 @@ namespace liltoon_MCR
             new[] { "取消除外", "Include", "除外を解除", "제외 해제" },
             new[] { "除外 {0}", "Excluded {0}", "除外 {0}", "제외 {0}" },
             new[] { "除外的材質（{0}）", "Excluded materials ({0})", "除外するマテリアル（{0}）", "제외할 머티리얼 ({0})" },
-            new[] { "除外的材質不會被轉換，也不會被重置或改動，維持現在的樣子。", "Excluded materials are not converted, reset or changed in any way: they stay exactly as they are.", "除外したマテリアルは変換もリセットも変更もされず、現在の状態のまま残ります。", "제외한 머티리얼은 변환, 초기화, 변경되지 않고 현재 상태 그대로 유지됩니다." },
+            new[] { "除外的材質不會被轉換，也不會被重置或改動，維持現在的樣子。換成另一個角色時清單會清空。", "Excluded materials are not converted, reset or changed in any way: they stay exactly as they are. The list is emptied when another avatar is put in.", "除外したマテリアルは変換もリセットも変更もされず、現在の状態のまま残ります。別のアバターを入れるとリストは空になります。", "제외한 머티리얼은 변환, 초기화, 변경되지 않고 현재 상태 그대로 유지됩니다. 다른 아바타를 넣으면 목록이 비워집니다." },
             new[] { "把材質拖到這裡，或直接拖入物件（可以是整個母級）：底下用到的材質會全部加入", "Drop materials here, or drop an object (a whole parent is fine): every material used under it is added", "ここにマテリアルをドロップ、またはオブジェクト（親ごとでも可）をドロップ：その下で使われているマテリアルがすべて追加されます", "여기에 머티리얼을 드롭하거나 오브젝트(부모 전체도 가능)를 드롭하세요: 그 아래에서 사용 중인 머티리얼이 모두 추가됩니다" },
             new[] { "加入目前選取的物件", "Add the selected objects", "選択中のオブジェクトを追加", "선택한 오브젝트 추가" },
             new[] { "全部取消", "Clear all", "すべて解除", "모두 해제" },

@@ -44,6 +44,9 @@ namespace liltoon_MCR
         private bool showExcluded = true;
         private string excludeMessage;
         private const string ConfigExcluded = "Macaron.Converter.Excluded";
+        // The avatar the list was made for: putting another avatar in empties the list.
+        private const string ConfigExcludedOwner = "Macaron.Converter.ExcludedOwner";
+        private GameObject excludedOwnerChecked;
         private const string PrefAddAdjuster = "Macaron.Converter.AddLightAdjuster";
         // Quality tier of the converted materials: 0 Lightest .. 4 Overkill.
         private const string PrefTier = "Macaron.Converter.Tier5";
@@ -391,6 +394,39 @@ namespace liltoon_MCR
             }
         }
 
+        // The exclude list belongs to one avatar. A different avatar in the field starts with an empty list;
+        // the same avatar (also after the window was closed) keeps it.
+        private void CheckExcludedOwner()
+        {
+            if(avatar == null || avatar == excludedOwnerChecked) return;
+            excludedOwnerChecked = avatar;
+            // "<global id>|<instance id>". An object that is not saved in a scene yet has no global id (target 0):
+            // it is recognized by its instance id, which lasts for this editor session.
+            GlobalObjectId gid = GlobalObjectId.GetGlobalObjectIdSlow(avatar);
+            string real = gid.targetObjectId != 0 ? gid.ToString() : string.Empty;
+            string instance = avatar.GetInstanceID().ToString();
+            string id = real + "|" + instance;
+            string owner = EditorUserSettings.GetConfigValue(ConfigExcludedOwner);
+            bool known = !string.IsNullOrEmpty(owner);
+            bool same = false;
+            if(known)
+            {
+                int bar = owner.LastIndexOf('|');
+                string ownerReal = bar >= 0 ? owner.Substring(0, bar) : owner;
+                string ownerInstance = bar >= 0 ? owner.Substring(bar + 1) : string.Empty;
+                same = ownerReal.Length > 0 && real.Length > 0 ? ownerReal == real : ownerInstance == instance;
+            }
+            // A list stored before the owner was recorded is taken over by the first avatar.
+            if(known && !same && excluded.Count > 0)
+            {
+                excluded.Clear();
+                excludeMessage = null;
+                EditorUserSettings.SetConfigValue(ConfigExcluded, string.Empty);
+            }
+            if(owner == id) return;
+            EditorUserSettings.SetConfigValue(ConfigExcludedOwner, id);
+        }
+
         private void ExcludedChanged()
         {
             excluded.RemoveAll(m => m == null);
@@ -455,7 +491,7 @@ namespace liltoon_MCR
             GUILayout.Space(6f);
             showExcluded = EditorGUILayout.Foldout(showExcluded, ML.F("除外的材質（{0}）", excluded.Count), true);
             if(!showExcluded) return;
-            EditorGUILayout.LabelField(ML.T("除外的材質不會被轉換，也不會被重置或改動，維持現在的樣子。"), EditorStyles.wordWrappedMiniLabel);
+            EditorGUILayout.LabelField(ML.T("除外的材質不會被轉換，也不會被重置或改動，維持現在的樣子。換成另一個角色時清單會清空。"), EditorStyles.wordWrappedMiniLabel);
 
             // Drop area: materials, or objects (a whole parent) whose materials are collected.
             Rect drop = GUILayoutUtility.GetRect(0f, 44f, GUILayout.ExpandWidth(true));
@@ -520,6 +556,7 @@ namespace liltoon_MCR
         {
             planDirty = false;
             LoadExcluded();
+            CheckExcludedOwner();
             plan.Clear();
             restoreMap.Clear();
             restoreMissing = 0;
