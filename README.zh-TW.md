@@ -4,7 +4,7 @@
 
 **以 lilToon 為基礎的 VRChat 角色著色器與工具組**
 
-![version](https://img.shields.io/badge/version-v1.5.8-ff8fab)
+![version](https://img.shields.io/badge/version-v1.5.9-ff8fab)
 ![lilToon](https://img.shields.io/badge/lilToon-2.x-8ecae6)
 ![platform](https://img.shields.io/badge/VRChat-Avatar-b8a1ff)
 ![UI](https://img.shields.io/badge/UI-繁中%20%7C%20English%20%7C%20日本語%20%7C%20한국어-lightgrey)

@@ -51,7 +51,10 @@ namespace liltoon_MCR
         /// The on / off switch itself is left alone (quality tiers turn it on, the user switches it in Batch Settings).
         /// Called by the Converter, and by Batch Settings when it is turned on for materials that were never set up.
         /// Returns a message for the user.</summary>
-        public static string Setup(GameObject avatar)
+        public static string Setup(GameObject avatar) { return Setup(avatar, null); }
+
+        /// <summary>Setup that leaves the given materials alone (the Converter's excluded materials).</summary>
+        public static string Setup(GameObject avatar, ICollection<Material> exclude)
         {
             if(avatar == null) return "";
             Undo.IncrementCurrentGroup();
@@ -60,6 +63,7 @@ namespace liltoon_MCR
 
             float reach = ReachFor(avatar);
             Dictionary<Material, Renderer> materials = MaterialsOf(avatar);
+            if(exclude != null) foreach(Material x in exclude) if(x != null) materials.Remove(x);
             int count = 0;
             foreach(KeyValuePair<Material, Renderer> kv in materials)
             {

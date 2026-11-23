@@ -17,7 +17,8 @@ namespace liltoon_MCR
     /// </summary>
     public class MacaronConverter : EditorWindow
     {
-        private enum Job { Convert, Reset, Skip }
+        // Exclude: chosen by the user (the list below the plan). Neither converted nor reset, left exactly as it is.
+        private enum Job { Convert, Reset, Skip, Exclude }
 
         private class Entry
         {
@@ -36,6 +37,13 @@ namespace liltoon_MCR
         private List<Entry> plan = new List<Entry>();
         private bool planDirty = true;
         private bool showList;
+        // Materials the user excluded: kept in the project's user settings (asset GUIDs), so running the Converter
+        // again after adding clothes does not ask for them again.
+        [SerializeField] private List<Material> excluded = new List<Material>();
+        private bool excludedLoaded;
+        private bool showExcluded = true;
+        private string excludeMessage;
+        private const string ConfigExcluded = "Macaron.Converter.Excluded";
         private const string PrefAddAdjuster = "Macaron.Converter.AddLightAdjuster";
         // Quality tier of the converted materials: 0 Lightest .. 4 Overkill.
         private const string PrefTier = "Macaron.Converter.Tier5";
@@ -171,6 +179,7 @@ namespace liltoon_MCR
             {
                 if(planDirty) BuildPlan();
                 DrawPlanSummary();
+                DrawExcluded();
             }
 
             GUILayout.Space(12f);
@@ -274,19 +283,20 @@ namespace liltoon_MCR
         private int CountWork()
         {
             int n = 0;
-            foreach(Entry e in plan) if(e.Action != Job.Skip) n++;
+            foreach(Entry e in plan) if(e.Action == Job.Convert || e.Action == Job.Reset) n++;
             return n;
         }
 
         private void DrawPlanSummary()
         {
-            int convert = 0, reset = 0, skip = 0;
+            int convert = 0, reset = 0, skip = 0, exclude = 0;
             foreach(Entry e in plan)
             {
                 switch(e.Action)
                 {
                     case Job.Convert: convert++; break;
                     case Job.Reset: reset++; break;
+                    case Job.Exclude: exclude++; break;
                     default: skip++; break;
                 }
             }
@@ -296,6 +306,7 @@ namespace liltoon_MCR
             MacaronGUI.Chip(ML.F("轉換 {0}", convert), MacaronGUI.Mint, 84f);
             MacaronGUI.Chip(ML.F("重置 {0}", reset), MacaronGUI.Lemon, 84f);
             MacaronGUI.Chip(ML.F("不支援 {0}", skip), MacaronGUI.Neutral, 96f);
+            if(exclude > 0) MacaronGUI.Chip(ML.F("除外 {0}", exclude), MacaronGUI.Neutral, 84f);
             GUILayout.FlexibleSpace();
             EditorGUILayout.EndHorizontal();
 
@@ -307,6 +318,7 @@ namespace liltoon_MCR
             showList = EditorGUILayout.Foldout(showList, ML.F("材質清單（{0}）", plan.Count), true);
             if(!showList) return;
 
+            Material toggle = null;
             foreach(Entry e in plan)
             {
                 EditorGUILayout.BeginHorizontal();
@@ -315,12 +327,22 @@ namespace liltoon_MCR
                 {
                     case Job.Convert: tag = ML.T("轉換"); break;
                     case Job.Reset: tag = ML.T("重置"); break;
+                    case Job.Exclude: tag = ML.T("除外"); break;
                     default: tag = ML.T("略過"); break;
                 }
                 EditorGUILayout.LabelField(tag, EditorStyles.miniBoldLabel, GUILayout.Width(64f));
                 using(new EditorGUI.DisabledScope(true))
                 {
                     EditorGUILayout.ObjectField(e.Material, typeof(Material), false);
+                }
+                // Skip = nothing would be done to it anyway.
+                if(e.Action == Job.Exclude)
+                {
+                    if(GUILayout.Button(ML.T("取消除外"), EditorStyles.miniButton, GUILayout.Width(72f))) toggle = e.Material;
+                }
+                else if(e.Action != Job.Skip)
+                {
+                    if(GUILayout.Button(ML.T("除外"), EditorStyles.miniButton, GUILayout.Width(72f))) toggle = e.Material;
                 }
                 EditorGUILayout.EndHorizontal();
                 if(!string.IsNullOrEmpty(e.Note))
@@ -330,6 +352,150 @@ namespace liltoon_MCR
                     EditorGUI.indentLevel--;
                 }
             }
+            // After the loop: the plan is rebuilt when the list changes.
+            if(toggle != null)
+            {
+                if(excluded.Contains(toggle)) excluded.Remove(toggle); else excluded.Add(toggle);
+                ExcludedChanged();
+            }
+        }
+
+        //------------------------------------------------------------------------------------------
+        // Excluded materials
+
+        private void LoadExcluded()
+        {
+            if(excludedLoaded) return;
+            excludedLoaded = true;
+            string stored = EditorUserSettings.GetConfigValue(ConfigExcluded);
+            if(string.IsNullOrEmpty(stored)) return;
+            foreach(string guid in stored.Split(';'))
+            {
+                if(guid.Length == 0) continue;
+                Material m = AssetDatabase.LoadAssetAtPath<Material>(AssetDatabase.GUIDToAssetPath(guid));
+                if(m != null && !excluded.Contains(m)) excluded.Add(m);
+            }
+        }
+
+        private void ExcludedChanged()
+        {
+            excluded.RemoveAll(m => m == null);
+            StringBuilder sb = new StringBuilder();
+            foreach(Material m in excluded)
+            {
+                // Only material assets can be remembered; a material that lives in the scene stays for this window.
+                string path = AssetDatabase.GetAssetPath(m);
+                if(string.IsNullOrEmpty(path) || !AssetDatabase.IsMainAsset(m)) continue;
+                if(sb.Length > 0) sb.Append(';');
+                sb.Append(AssetDatabase.AssetPathToGUID(path));
+            }
+            EditorUserSettings.SetConfigValue(ConfigExcluded, sb.ToString());
+            planDirty = true;
+            resultMessage = null;
+            Repaint();
+        }
+
+        /// <summary>Every material in the dropped / selected objects: a material itself, the materials of a renderer,
+        /// or of all renderers under a GameObject (a whole parent, inactive children included).</summary>
+        private static void CollectMaterials(UnityEngine.Object[] objects, List<Material> into)
+        {
+            if(objects == null) return;
+            foreach(UnityEngine.Object o in objects)
+            {
+                if(o == null) continue;
+                Material material = o as Material;
+                if(material != null) { if(!into.Contains(material)) into.Add(material); continue; }
+                Renderer[] renderers = null;
+                GameObject go = o as GameObject;
+                Component component = o as Component;
+                if(go != null) renderers = go.GetComponentsInChildren<Renderer>(true);
+                else if(component != null) renderers = component.GetComponentsInChildren<Renderer>(true);
+                if(renderers == null) continue;
+                foreach(Renderer r in renderers)
+                    foreach(Material m in r.sharedMaterials)
+                        if(m != null && !into.Contains(m)) into.Add(m);
+            }
+        }
+
+        private void AddExcluded(UnityEngine.Object[] objects)
+        {
+            List<Material> found = new List<Material>();
+            CollectMaterials(objects, found);
+            int added = 0;
+            foreach(Material m in found)
+            {
+                if(excluded.Contains(m)) continue;
+                excluded.Add(m);
+                added++;
+            }
+            excludeMessage = found.Count == 0 ? ML.T("找不到材質。請拖入材質，或底下有 Renderer 的物件。")
+                : ML.F("找到 {0} 個材質，新加入 {1} 個。", found.Count, added);
+            if(added > 0) ExcludedChanged();
+        }
+
+        private void DrawExcluded()
+        {
+            LoadExcluded();
+            excluded.RemoveAll(m => m == null);
+            GUILayout.Space(6f);
+            showExcluded = EditorGUILayout.Foldout(showExcluded, ML.F("除外的材質（{0}）", excluded.Count), true);
+            if(!showExcluded) return;
+            EditorGUILayout.LabelField(ML.T("除外的材質不會被轉換，也不會被重置或改動，維持現在的樣子。"), EditorStyles.wordWrappedMiniLabel);
+
+            // Drop area: materials, or objects (a whole parent) whose materials are collected.
+            Rect drop = GUILayoutUtility.GetRect(0f, 44f, GUILayout.ExpandWidth(true));
+            GUIStyle box = new GUIStyle(EditorStyles.helpBox) { alignment = TextAnchor.MiddleCenter, wordWrap = true };
+            GUI.Box(drop, ML.T("把材質拖到這裡，或直接拖入物件（可以是整個母級）：底下用到的材質會全部加入"), box);
+            Event ev = Event.current;
+            if((ev.type == EventType.DragUpdated || ev.type == EventType.DragPerform) && drop.Contains(ev.mousePosition))
+            {
+                List<Material> probe = new List<Material>();
+                CollectMaterials(DragAndDrop.objectReferences, probe);
+                DragAndDrop.visualMode = probe.Count > 0 ? DragAndDropVisualMode.Copy : DragAndDropVisualMode.Rejected;
+                if(ev.type == EventType.DragPerform && probe.Count > 0)
+                {
+                    DragAndDrop.AcceptDrag();
+                    AddExcluded(DragAndDrop.objectReferences);
+                }
+                ev.Use();
+            }
+
+            EditorGUILayout.BeginHorizontal();
+            using(new EditorGUI.DisabledScope(Selection.objects == null || Selection.objects.Length == 0))
+            {
+                if(GUILayout.Button(ML.T("加入目前選取的物件"), EditorStyles.miniButton)) AddExcluded(Selection.objects);
+            }
+            using(new EditorGUI.DisabledScope(excluded.Count == 0))
+            {
+                if(GUILayout.Button(ML.T("全部取消"), EditorStyles.miniButton, GUILayout.Width(80f)))
+                {
+                    excluded.Clear();
+                    excludeMessage = null;
+                    ExcludedChanged();
+                }
+            }
+            EditorGUILayout.EndHorizontal();
+            if(!string.IsNullOrEmpty(excludeMessage)) EditorGUILayout.LabelField(excludeMessage, EditorStyles.wordWrappedMiniLabel);
+
+            HashSet<Material> used = new HashSet<Material>();
+            foreach(Entry e in plan) used.Add(e.Material);
+            Material remove = null;
+            foreach(Material m in excluded)
+            {
+                EditorGUILayout.BeginHorizontal();
+                using(new EditorGUI.DisabledScope(true))
+                {
+                    EditorGUILayout.ObjectField(m, typeof(Material), false);
+                }
+                if(!used.Contains(m)) EditorGUILayout.LabelField(ML.T("這個角色沒有使用"), EditorStyles.miniLabel, GUILayout.Width(110f));
+                if(GUILayout.Button("×", EditorStyles.miniButton, GUILayout.Width(22f))) remove = m;
+                EditorGUILayout.EndHorizontal();
+            }
+            if(remove != null)
+            {
+                excluded.Remove(remove);
+                ExcludedChanged();
+            }
         }
 
         //------------------------------------------------------------------------------------------
@@ -338,6 +504,7 @@ namespace liltoon_MCR
         private void BuildPlan()
         {
             planDirty = false;
+            LoadExcluded();
             plan.Clear();
             restoreMap.Clear();
             restoreMissing = 0;
@@ -349,7 +516,7 @@ namespace liltoon_MCR
                 foreach(Material m in r.sharedMaterials)
                 {
                     if(m == null || !seen.Add(m)) continue;
-                    plan.Add(Classify(m, r));
+                    plan.Add(excluded.Contains(m) ? new Entry { Material = m, Renderer = r, Action = Job.Exclude } : Classify(m, r));
                     // Restore covers every material the tools put on the avatar: the converted ones, and the World
                     // Shadow receiver copies of materials that were never converted (FakeShadow, Overlay, FurOnly...).
                     if(!MacaronCore.IsMacaronShader(m.shader) && !MacaronWorldShadowReceivers.IsReceiverCopy(m)) continue;
@@ -415,7 +582,8 @@ namespace liltoon_MCR
             Dictionary<Material, Material> result = new Dictionary<Material, Material>(plan.Count);
             string folder = MacaronCore.ConvertedFolder + "/" + MacaronCore.SafeFileName(avatar.name);
             MacaronCore.EnsureFolder(folder);
-            int converted = 0, reset = 0, skipped = 0, failed = 0;
+            int converted = 0, reset = 0, skipped = 0, failed = 0, left = 0;
+            List<Material> leftAlone = new List<Material>();
             StringBuilder log = new StringBuilder();
 
             foreach(Entry e in plan)
@@ -447,6 +615,11 @@ namespace liltoon_MCR
                         reset++;
                         log.AppendLine(ML.F("重置  {0}", e.Material.name));
                         break;
+                    case Job.Exclude:
+                        left++;
+                        leftAlone.Add(e.Material);
+                        log.AppendLine(ML.F("除外  {0} : 未變更", e.Material.name));
+                        break;
                     default:
                         skipped++;
                         log.AppendLine(ML.F("略過  {0} : {1}", e.Material.name, e.Note));
@@ -477,7 +650,7 @@ namespace liltoon_MCR
 
             WarnSharedAxis(result, log);
             // Per-avatar part of the tier (lilMCR PCSS light resolution, when that add-on and its light exist).
-            MacaronCore.ApplyTierToAvatar(avatar, tier);
+            MacaronCore.ApplyTierToAvatar(avatar, tier, leftAlone);
 
             // Light Adjuster: after the new materials are assigned (it targets renderers with Macaron materials).
             string adjusterMessage = null;
@@ -490,7 +663,7 @@ namespace liltoon_MCR
 
             // Uzumore per-avatar values (the IsLocal layer is part of the Light Adjuster above): after the new materials are assigned (it works on the avatar's
             // Macaron materials). The on / off switch comes from the tier.
-            string uzumoreMessage = MacaronUzumore.Setup(avatar);
+            string uzumoreMessage = MacaronUzumore.Setup(avatar, leftAlone);
             log.AppendLine(uzumoreMessage);
 
             Undo.CollapseUndoOperations(undoGroup);
@@ -505,6 +678,7 @@ namespace liltoon_MCR
             Debug.Log("[Macaron] " + avatar.name + "\n" + log);
             resultType = failed > 0 ? MessageType.Warning : MessageType.Info;
             resultMessage = ML.F("完成！轉換 {0}、重置 {1}、略過 {2}。", converted, reset, skipped) +
+                            (left > 0 ? "\n" + ML.F("除外的 {0} 個材質沒有變更。", left) : string.Empty) +
                             (failed > 0 ? "\n" + ML.F("有 {0} 個材質無法複製，已保持原樣（材質資產可能已損壞，例如找不到父材質的 Material Variant）。", failed) : string.Empty) +
                             (depthSourceAdded ? "\n" + ML.T("已把 MCR_DepthSource（產生深度貼圖用的光源）加到角色底下。") : string.Empty) +
                             (adjusterMessage != null ? "\n" + adjusterMessage : string.Empty) +

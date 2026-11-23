@@ -975,11 +975,14 @@ namespace liltoon_MCR
         public static event Action<GameObject, int> TierAppliedToAvatar;
 
         /// <summary>Call after ApplyTier on an avatar's materials.</summary>
-        public static void ApplyTierToAvatar(GameObject avatar, int tier)
+        public static void ApplyTierToAvatar(GameObject avatar, int tier) { ApplyTierToAvatar(avatar, tier, null); }
+
+        /// <summary>ApplyTierToAvatar that leaves the given materials alone (the Converter's excluded materials).</summary>
+        public static void ApplyTierToAvatar(GameObject avatar, int tier, ICollection<Material> exclude)
         {
             if(avatar == null) return;
             // The tier reset Uzumore's Reach / Layer Offset: set them for this avatar again.
-            MacaronUzumore.Setup(avatar);
+            MacaronUzumore.Setup(avatar, exclude);
             if(TierAppliedToAvatar != null) TierAppliedToAvatar(avatar, tier);
         }
 
