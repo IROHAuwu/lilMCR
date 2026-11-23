@@ -2090,7 +2090,7 @@ void Macaron_Apply(inout lilFragData fd)
 //                is lilToon's light direction (the same one lilToon's Backlight uses, so both light the same side) or
 //                the direction of lilMCR's contact shadow.
 //   Cost       : 1 depth read to test that this material is in the depth texture (+1 only where that fails), and
-//                1 read for the rim (3 with Feather).
+//                1 read for the rim; where a rim is found and Feather is on, 2 to 5 more to locate the silhouette.
 // Limits of the method: no rim where something stands closer behind the avatar than the Depth Threshold (a wall, a
 // chair, another player), and none without a depth texture.
 // Same passes as Macaron_Apply. Not darkened by the occlusion; lilMCR PCSS's multiply pass still shades it.
@@ -2191,15 +2191,28 @@ void Macaron_DepthRim(inout lilFragData fd)
             [branch]
             if(inDepth)
             {
-                rim = MCR_RimTap(centerCS + offsetPx, ownDepth, threshold, di);
+                // How far behind the surface the scene is at the full width: 0..1 over the upper part of the threshold.
+                float found = MCR_RimTap(centerCS + offsetPx, ownDepth, threshold, di);
+                rim = found;
                 float feather = saturate(_MCR_RimFeather);
                 [branch]
-                if(feather > 0.0)
+                if(found > 0.0 && feather > 0.0)
                 {
-                    // Two more taps closer to the pixel: the inner edge of the rim fades in three steps.
-                    rim += MCR_RimTap(centerCS + offsetPx * (1.0 - 0.5 * feather), ownDepth, threshold, di);
-                    rim += MCR_RimTap(centerCS + offsetPx * (1.0 - feather), ownDepth, threshold, di);
-                    rim *= 1.0 / 3.0;
+                    // Where between this pixel (0) and the full width (1) does the silhouette lie? Bisection: each step
+                    // halves the interval, so the distance is known to about a pixel. The rim then fades smoothly from
+                    // the silhouette inward instead of being one flat band.
+                    float lo = 0.0;
+                    float hi = 1.0;
+                    int steps = (int)clamp(ceil(log2(max(min(lengthPx, capPx), 1.0))), 2.0, 5.0);
+                    [loop]
+                    for(int i = 0; i < steps; i++)
+                    {
+                        float mid = 0.5 * (lo + hi);
+                        if(MCR_RimTap(centerCS + offsetPx * mid, ownDepth, threshold, di) > 0.5) hi = mid;
+                        else lo = mid;
+                    }
+                    float x = 1.0 - 0.5 * (lo + hi);        // 1 at the silhouette, 0 at the inner end of the rim
+                    rim = found * lerp(1.0, x * x * (3.0 - 2.0 * x), feather);
                 }
             }
 

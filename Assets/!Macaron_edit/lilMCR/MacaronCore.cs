@@ -320,7 +320,7 @@ namespace liltoon_MCR
                 "世界光源：跟隨 lilToon 計算出的光源方向，與 lilToon 的逆光亮在同一側。lilMCR 的光源方向：使用接觸陰影設定的固定方向。"));
             rim.Props.Add(Popup("_MCR_RimBlend", "混合方式", new[] { "濾色（不過曝）", "加算", "取代" }, new[] { 0f, 1f, 2f },
                 "濾色：不會比亮邊顏色本身更亮，與 lilToon 的邊緣光、逆光疊在一起也不容易過曝。"));
-            rim.Props.Add(P("_MCR_RimFeather", "內側柔化", MacaronPropKind.Slider, "0 = 銳利（每像素 1 次深度取樣），大於 0 = 內側邊緣分三段淡出（3 次取樣）。"));
+            rim.Props.Add(P("_MCR_RimFeather", "內側柔化", MacaronPropKind.Slider, "0 = 整條亮邊同樣亮度的硬邊，1 = 從輪廓往內側平滑淡出（像一般的邊緣光）。大於 0 時，有亮邊的像素會多做 2～5 次深度取樣來找出輪廓位置。"));
             rim.Props.Add(Adv(P("_MCR_RimThreshold", "輪廓判定距離 (m)", MacaronPropKind.Slider,
                 "後方比這個距離更遠才算輪廓。調小：靠近牆壁時也會亮，但衣服皺褶等內側落差也可能亮起來。")));
             rim.Props.Add(Adv(P("_MCR_RimAlbedo", "沿用底色", MacaronPropKind.Slider, "0 = 使用上面的顏色，1 = 再乘上材質的底色。")));
