@@ -63,7 +63,9 @@ namespace liltoon_MCR
 
             float reach = ReachFor(avatar);
             Dictionary<Material, Renderer> materials = MaterialsOf(avatar);
+            int before = materials.Count;
             if(exclude != null) foreach(Material x in exclude) if(x != null) materials.Remove(x);
+            bool onlyExcluded = before > 0 && materials.Count == 0;
             int count = 0;
             foreach(KeyValuePair<Material, Renderer> kv in materials)
             {
@@ -89,6 +91,7 @@ namespace liltoon_MCR
             }
             Undo.CollapseUndoOperations(group);
 
+            if(onlyExcluded) return "";   // every Macaron material is excluded: nothing to report
             if(count == 0) return ML.T("這個角色沒有 Macaron 材質，沒有設定埋入。");
             return ML.F("已設定 {0} 個材質的埋入（推回範圍 {1:0.00} m，可在批次設定中開關）。", count, reach);
         }

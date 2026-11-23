@@ -369,11 +369,25 @@ namespace liltoon_MCR
             excludedLoaded = true;
             string stored = EditorUserSettings.GetConfigValue(ConfigExcluded);
             if(string.IsNullOrEmpty(stored)) return;
-            foreach(string guid in stored.Split(';'))
+            foreach(string entry in stored.Split(';'))
             {
-                if(guid.Length == 0) continue;
-                Material m = AssetDatabase.LoadAssetAtPath<Material>(AssetDatabase.GUIDToAssetPath(guid));
-                if(m != null && !excluded.Contains(m)) excluded.Add(m);
+                if(entry.Length == 0) continue;
+                // "guid:localId": the local id tells the materials inside one file apart (materials embedded in a model).
+                string[] parts = entry.Split(':');
+                string path = AssetDatabase.GUIDToAssetPath(parts[0]);
+                if(string.IsNullOrEmpty(path)) continue;
+                long wantedId = 0;
+                bool hasId = parts.Length > 1 && long.TryParse(parts[1], out wantedId);
+                foreach(UnityEngine.Object o in AssetDatabase.LoadAllAssetsAtPath(path))
+                {
+                    Material m = o as Material;
+                    if(m == null) continue;
+                    string g;
+                    long id;
+                    if(hasId && !(AssetDatabase.TryGetGUIDAndLocalFileIdentifier(m, out g, out id) && id == wantedId)) continue;
+                    if(!excluded.Contains(m)) excluded.Add(m);
+                    break;
+                }
             }
         }
 
@@ -384,10 +398,11 @@ namespace liltoon_MCR
             foreach(Material m in excluded)
             {
                 // Only material assets can be remembered; a material that lives in the scene stays for this window.
-                string path = AssetDatabase.GetAssetPath(m);
-                if(string.IsNullOrEmpty(path) || !AssetDatabase.IsMainAsset(m)) continue;
+                string guid;
+                long localId;
+                if(!AssetDatabase.TryGetGUIDAndLocalFileIdentifier(m, out guid, out localId)) continue;
                 if(sb.Length > 0) sb.Append(';');
-                sb.Append(AssetDatabase.AssetPathToGUID(path));
+                sb.Append(guid).Append(':').Append(localId);
             }
             EditorUserSettings.SetConfigValue(ConfigExcluded, sb.ToString());
             planDirty = true;
@@ -520,6 +535,8 @@ namespace liltoon_MCR
                     // Restore covers every material the tools put on the avatar: the converted ones, and the World
                     // Shadow receiver copies of materials that were never converted (FakeShadow, Overlay, FurOnly...).
                     if(!MacaronCore.IsMacaronShader(m.shader) && !MacaronWorldShadowReceivers.IsReceiverCopy(m)) continue;
+                    // Excluded = left exactly as it is: not swapped back by Restore either.
+                    if(excluded.Contains(m)) continue;
                     Material source;
                     if(!sourceCache.TryGetValue(m, out source)) sourceCache[m] = source = FindOriginal(m);
                     if(source != null) restoreMap[m] = source;
