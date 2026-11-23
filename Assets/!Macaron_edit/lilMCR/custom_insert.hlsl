@@ -2077,6 +2077,150 @@ void Macaron_Apply(inout lilFragData fd)
 }
 
 //------------------------------------------------------------------------------------------------------------------------------
+// Depth Rim Light (called from BEFORE_FOG after Macaron_Apply, see custom.hlsl)
+//
+// A rim of constant width along the silhouette. lilToon's own Rim Light and Backlight are computed from the surface
+// normal: wide on round shapes, also on an arm in front of the body. This one looks into the camera depth texture a
+// fixed distance away from the pixel: where the scene there is far behind this surface, the pixel is next to the real
+// silhouette.
+//   Width      : meters on the surface, so the rim keeps its size on the avatar at any distance and resolution
+//                (at most MCR_RIM_MAX_FRAC of the screen height, faded out below one pixel).
+//   Direction  : the offset goes along the screen direction of the surface normal (Light Side Only 0: all around) or
+//                toward the light (1: only the lit side, tapering where the outline runs along the light). The light
+//                is lilToon's light direction (the same one lilToon's Backlight uses, so both light the same side) or
+//                the direction of lilMCR's contact shadow.
+//   Cost       : 1 depth read to test that this material is in the depth texture (+1 only where that fails), and
+//                1 read for the rim (3 with Feather).
+// Limits of the method: no rim where something stands closer behind the avatar than the Depth Threshold (a wall, a
+// chair, another player), and none without a depth texture.
+// Same passes as Macaron_Apply. Not darkened by the occlusion; lilMCR PCSS's multiply pass still shades it.
+#define MCR_RIM_MAX_FRAC 0.04
+
+float MCR_RimTap(float2 px, float ownDepth, float threshold, MCRDepthInfo di)
+{
+    // Outside the eye there is no data: no rim (the avatar cut off by the screen edge has no outline there).
+    if(!MCR_InsideEye(px, di)) return 0.0;
+    return smoothstep(threshold * 0.6, threshold, MCR_ReadDepth(px, di) - ownDepth);
+}
+
+void Macaron_DepthRim(inout lilFragData fd)
+{
+#if defined(LIL_OUTLINE) || defined(LIL_FUR) || defined(LIL_PASS_SHADOWCASTER) || defined(LIL_PASS_META) || defined(LIL_PASS_DEPTHONLY) || defined(LIL_PASS_DEPTHNORMALS) || defined(LIL_PASS_MOTIONVECTORS) || defined(LIL_PASS_FORWARDADD)
+#else
+    if(Macaron_IsWorldCapture()) return;
+    if(abs(LIL_MATRIX_P._m33) > 0.5) return;    // orthographic
+    // Uniform per draw call.
+    bool use = MCR_MenuActive() && _MCR_Active > 0.5 && Macaron_LocalVisible() && _MCR_RimEnable > 0.5
+        && _MCR_RimIntensity > 0.0 && _MCR_RimColor.a > 0.0;
+    if(!use) return;
+
+    // Masks before any per-pixel branch (implicit gradients).
+    float mask = 1.0;
+    if(_MCR_GlobalMaskAmount > 0.0)
+    {
+        float2 globalUV = fd.uvMain * _MCR_GlobalMask_ST.xy + _MCR_GlobalMask_ST.zw;
+        mask = MCR_MaskFactor(LIL_SAMPLE_2D(_MCR_GlobalMask, lil_sampler_linear_repeat, globalUV).r, _MCR_GlobalMaskAmount);
+    }
+    if(_MCR_RimMaskAmount > 0.0)
+    {
+        mask *= MCR_MaskFactor(LIL_SAMPLE_2D(_MCR_RimMask, lil_sampler_linear_repeat, fd.uvMain).r, _MCR_RimMaskAmount);
+    }
+
+    float weight = mask * MCR_FadeOut(fd.positionCS.w) * MCR_NearFade(fd.positionCS.w) * (1.0 - mcrUzuFade);
+    weight *= saturate(_MCR_RimIntensity) * saturate(_MCR_RimColor.a);
+    weight *= lerp(1.0, saturate(fd.shadowmix), saturate(_MCR_RimShadow));
+    #if defined(LIL_RENDER) && LIL_RENDER == 2
+        weight *= saturate(fd.col.a);
+    #endif
+
+    MCRDepthInfo di = MCR_GetDepthInfo();
+    [branch]
+    if(weight > 0.0 && di.present)
+    {
+        float2 centerCS = MCR_EyePixel(fd.positionCS.xy, di);
+        float ownDepth = max(LIL_TO_LINEARDEPTH(fd.positionCS.z, centerCS), MCR_EPS);
+        float3 centerRay = MCR_ViewRay(centerCS, di);
+        float3 positionVS = centerRay * ownDepth;
+
+        // Screen direction of the surface normal (pointing out of the silhouette) and of the light.
+        float3 nWS = dot(fd.origN, fd.origN) > 0.25 ? fd.origN : fd.N;
+        float3 nVS = mul((float3x3)LIL_MATRIX_V, nWS);
+        if(dot(nVS, centerRay) > 0.0) nVS = -nVS;       // back faces: the side that faces the camera
+        float nLen = length(nVS.xy);
+        float2 dn = nLen > 0.001 ? nVS.xy / nLen : float2(0.0, 0.0);
+
+        float3 lVS = mul((float3x3)LIL_MATRIX_V, fd.L);
+        if(_MCR_RimLightSource > 0.5 || dot(lVS, lVS) < 0.25) lVS = MCR_ShadowLightDirView();
+        float lLen = length(lVS.xy);
+        float2 dl = lLen > 0.001 ? lVS.xy / lLen : float2(0.0, 0.0);
+        // A light along the view axis has no screen direction: the rim goes all around there.
+        float side = saturate(_MCR_RimLightSide) * saturate(lLen * 4.0);
+
+        float2 dir = lerp(dn, dl, side);
+        float dirLen = length(dir);
+        // Normal and light opposite each other (the unlit side at half Light Side): no direction, no rim.
+        dir = dirLen > 0.001 ? dir / dirLen : float2(0.0, 0.0);
+        weight *= saturate(dirLen * 4.0);
+
+        // Width: a step of Rim Width meters in the view plane, projected (handles the off-center VR frustum and
+        // flipped projections), then limited on screen.
+        float width = max(_MCR_RimWidth, 0.0);
+        float2 offsetPx = MCR_ViewToEyePixel(positionVS + float3(dir * width, 0.0), di) - centerCS;
+        float lengthPx = length(offsetPx);
+        float capPx = MCR_RIM_MAX_FRAC * di.screenSize.y;
+        if(lengthPx > capPx) offsetPx *= capPx / lengthPx;
+        weight *= MCR_SubPixelFade(lengthPx);
+
+        [branch]
+        if(weight > 0.0)
+        {
+            float threshold = max(_MCR_RimThreshold, 0.001);
+            // Is this material in the depth texture? A material that is not (render queue above 2500) reads what is
+            // behind it everywhere and would be all rim. This pixel, or (on the anti-aliased outline, where the
+            // depth texture can already hold the background) a pixel one step inside, must hold this surface.
+            float tolerance = 0.01 + 0.01 * ownDepth + threshold * 0.25;
+            bool inDepth = abs(MCR_ReadDepth(centerCS, di) - ownDepth) < tolerance;
+            [branch]
+            if(!inDepth)
+            {
+                float2 inwardPx = centerCS - offsetPx / max(length(offsetPx), 1.0) * 2.0;
+                inDepth = abs(MCR_ReadDepth(inwardPx, di) - ownDepth) < tolerance;
+            }
+
+            float rim = 0.0;
+            [branch]
+            if(inDepth)
+            {
+                rim = MCR_RimTap(centerCS + offsetPx, ownDepth, threshold, di);
+                float feather = saturate(_MCR_RimFeather);
+                [branch]
+                if(feather > 0.0)
+                {
+                    // Two more taps closer to the pixel: the inner edge of the rim fades in three steps.
+                    rim += MCR_RimTap(centerCS + offsetPx * (1.0 - 0.5 * feather), ownDepth, threshold, di);
+                    rim += MCR_RimTap(centerCS + offsetPx * (1.0 - feather), ownDepth, threshold, di);
+                    rim *= 1.0 / 3.0;
+                }
+            }
+
+            float amount = rim * weight;
+            float3 rimColor = max(_MCR_RimColor.rgb, 0.0);
+            rimColor *= lerp(1.0.xxx, saturate(fd.albedo), saturate(_MCR_RimAlbedo));
+            rimColor *= lerp(1.0.xxx, fd.lightColor, saturate(_MCR_RimLighting));
+            float3 col = fd.col.rgb;
+            int blend = (int)round(_MCR_RimBlend);
+            // 0 Screen: never brighter than the rim color itself, so it does not burn out on top of lilToon's own
+            // Rim Light / Backlight. 1 Add. 2 Replace.
+            if(blend == 1) col += rimColor * amount;
+            else if(blend == 2) col = lerp(col, rimColor, amount);
+            else col += rimColor * amount * saturate(1.0 - col / max(rimColor, 0.0001.xxx));
+            fd.col.rgb = col;
+        }
+    }
+#endif
+}
+
+//------------------------------------------------------------------------------------------------------------------------------
 // Light Adjuster
 
 // Light tint for a color temperature control: -1 = cool (about 10000K), 0 = neutral, +1 = warm (about 3000K).

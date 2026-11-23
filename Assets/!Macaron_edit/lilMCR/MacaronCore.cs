@@ -305,6 +305,36 @@ namespace liltoon_MCR
             list.Add(shadow);
 
             //--------------------------------------------------------------------------------------
+            // Depth Rim Light (custom_insert.hlsl, Macaron_DepthRim). A look, not a quality setting: off by default and
+            // not part of the quality tiers.
+            MacaronSection rim = new MacaronSection
+            {
+                Id = "rim", Title = "深度邊緣光", EnableProp = "_MCR_RimEnable",
+                Help = "沿著角色外輪廓的等寬亮邊。以深度貼圖判斷輪廓，所以手臂擋在身體前面時不會亮；角色後方很近的地方有牆、椅子或其他玩家時，亮邊會變弱或消失。與 lilToon 的邊緣光、逆光可以同時使用。"
+            };
+            rim.Props.Add(Hdr(P("_MCR_RimColor", "顏色", MacaronPropKind.Color)));
+            rim.Props.Add(P("_MCR_RimIntensity", "強度", MacaronPropKind.Slider));
+            rim.Props.Add(P("_MCR_RimWidth", "寬度 (m)", MacaronPropKind.Slider, "亮邊在角色身上的寬度。0.004 = 4 公釐。"));
+            rim.Props.Add(P("_MCR_RimLightSide", "只亮受光側", MacaronPropKind.Slider, "0 = 整圈輪廓都亮，1 = 只有朝向光源的那一側。"));
+            rim.Props.Add(Popup("_MCR_RimLightSource", "光源", new[] { "世界光源（與 lilToon 相同）", "lilMCR 的光源方向" }, new[] { 0f, 1f },
+                "世界光源：跟隨 lilToon 計算出的光源方向，與 lilToon 的逆光亮在同一側。lilMCR 的光源方向：使用接觸陰影設定的固定方向。"));
+            rim.Props.Add(Popup("_MCR_RimBlend", "混合方式", new[] { "濾色（不過曝）", "加算", "取代" }, new[] { 0f, 1f, 2f },
+                "濾色：不會比亮邊顏色本身更亮，與 lilToon 的邊緣光、逆光疊在一起也不容易過曝。"));
+            rim.Props.Add(P("_MCR_RimFeather", "內側柔化", MacaronPropKind.Slider, "0 = 銳利（每像素 1 次深度取樣），大於 0 = 內側邊緣分三段淡出（3 次取樣）。"));
+            rim.Props.Add(Adv(P("_MCR_RimThreshold", "輪廓判定距離 (m)", MacaronPropKind.Slider,
+                "後方比這個距離更遠才算輪廓。調小：靠近牆壁時也會亮，但衣服皺褶等內側落差也可能亮起來。")));
+            rim.Props.Add(Adv(P("_MCR_RimAlbedo", "沿用底色", MacaronPropKind.Slider, "0 = 使用上面的顏色，1 = 再乘上材質的底色。")));
+            rim.Props.Add(Adv(P("_MCR_RimLighting", "跟隨光源顏色", MacaronPropKind.Slider, "1 = 亮邊乘上光源顏色，暗的世界裡也會跟著變暗。0 = 固定亮度（暗處會像自發光）。")));
+            rim.Props.Add(Adv(P("_MCR_RimShadow", "陰影中減弱", MacaronPropKind.Slider, "lilToon 的陰影範圍內減弱亮邊。")));
+            MacaronProp rimMask = Adv(P("_MCR_RimMask", "邊緣光遮罩", MacaronPropKind.Texture, "白 = 有亮邊、黑 = 沒有亮邊（R 通道）。可用遮罩生成器製作。"));
+            rimMask.TextureExtra = "_MCR_RimMaskAmount";
+            rim.Props.Add(rimMask);
+            MacaronProp rimMaskAmount = Adv(P("_MCR_RimMaskAmount", "邊緣光遮罩強度", MacaronPropKind.Slider));
+            rimMaskAmount.InlineExtra = true;
+            rim.Props.Add(rimMaskAmount);
+            list.Add(rim);
+
+            //--------------------------------------------------------------------------------------
             // Uzumore (custom_insert.hlsl, Macaron_UzumoreOS). On / Brightness are part of every quality tier; Reach and
             // Layer Offset are per avatar (MacaronUzumore.Setup: Converter, or Batch Settings when it is turned on).
             MacaronSection uzu = new MacaronSection

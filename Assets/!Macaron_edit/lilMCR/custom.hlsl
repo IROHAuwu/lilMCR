@@ -94,7 +94,20 @@
     float _MCR_UzuSelf; \
     float _MCR_UzuMaskAmount; \
     float _MCR_UzuIsLocal; \
-    float _MCR_LocalOnly;
+    float _MCR_LocalOnly; \
+    float _MCR_RimEnable; \
+    float4 _MCR_RimColor; \
+    float _MCR_RimIntensity; \
+    float _MCR_RimWidth; \
+    float _MCR_RimLightSide; \
+    float _MCR_RimLightSource; \
+    float _MCR_RimThreshold; \
+    float _MCR_RimFeather; \
+    float _MCR_RimBlend; \
+    float _MCR_RimAlbedo; \
+    float _MCR_RimLighting; \
+    float _MCR_RimShadow; \
+    float _MCR_RimMaskAmount;
 
 // Textures only. Sampled with lilToon's shared sampler (lil_sampler_linear_repeat), so no sampler is added.
 #define LIL_CUSTOM_TEXTURES \
@@ -102,7 +115,8 @@
     TEXTURE2D(_MCR_GlobalMask); \
     TEXTURE2D(_MCR_OccMask); \
     TEXTURE2D(_MCR_ShadowMask); \
-    TEXTURE2D(_MCR_UzuMask);
+    TEXTURE2D(_MCR_UzuMask); \
+    TEXTURE2D(_MCR_RimMask);
 
 // Uzumore (vertex stage of the color passes): main UV for its mask and the object-space normal for the facing test.
 #define LIL_REQUIRE_APP_POSITION
@@ -117,7 +131,8 @@
 // Applied right before fog, so fog is not darkened.
 // BEFORE_FOG only exists in the forward passes (normal / lite / fur / gem), never in ShadowCaster / Meta.
 // Uzumore first: it darkens what is close to the camera and fades Macaron_Apply's occlusion out there.
-#define BEFORE_FOG Macaron_UzumoreFS(fd); Macaron_Apply(fd);
+// The Depth Rim Light comes last: it is light on top of the shaded surface, not darkened by the occlusion.
+#define BEFORE_FOG Macaron_UzumoreFS(fd); Macaron_Apply(fd); Macaron_DepthRim(fd);
 
 // Occlusion on Reflections: remembers the color right before reflection / MatCap and right before emission, so the
 // part added in between (reflection, MatCap, rim light, glitter) can be occluded separately.

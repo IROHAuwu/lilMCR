@@ -41,9 +41,9 @@ namespace LilMCR.MaskGenerator
         Vector2 lastPaint;
         bool hasLastPaint;
         static readonly int[] Sizes = { 512, 1024, 2048, 4096 };
-        static readonly string[] Targets = { "全域遮罩（含 PCSS）", "AO 遮罩", "Contact Shadow 遮罩", "不產生陰影遮罩", "埋入遮罩", "PCSS 遮罩" };
-        static readonly string[] Properties = { "_MCR_GlobalMask", "_MCR_OccMask", "_MCR_ShadowMask", "_MCR_CasterMask", "_MCR_UzuMask", "_lilMCRPCSS_Mask" };
-        static readonly string[] FileSuffixes = { "_MCR_Mask", "_MCR_OccMask", "_MCR_ShadowMask", "_MCR_CasterMask", "_MCR_UzuMask", "_PCSS_Mask" };
+        static readonly string[] Targets = { "全域遮罩（含 PCSS）", "AO 遮罩", "Contact Shadow 遮罩", "不產生陰影遮罩", "埋入遮罩", "PCSS 遮罩", "邊緣光遮罩" };
+        static readonly string[] Properties = { "_MCR_GlobalMask", "_MCR_OccMask", "_MCR_ShadowMask", "_MCR_CasterMask", "_MCR_UzuMask", "_lilMCRPCSS_Mask", "_MCR_RimMask" };
+        static readonly string[] FileSuffixes = { "_MCR_Mask", "_MCR_OccMask", "_MCR_ShadowMask", "_MCR_CasterMask", "_MCR_UzuMask", "_PCSS_Mask", "_MCR_RimMask" };
         // Index of the Uzumore target (white = pushed back, black = excluded).
         const int UzumoreTarget = 4;
         // Index of the lilMCR PCSS target (PCSS-only mask; lilMCR PCSS materials only).

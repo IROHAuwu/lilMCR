@@ -88,6 +88,7 @@ namespace LilMCR.MaskGenerator
             { "輸出失敗", new[] { "Export failed", "出力に失敗しました", "출력 실패" } },
             { "埋入遮罩", new[] { "Uzumore mask", "埋もれマスク", "파묻힘 마스크" } },
             { "PCSS 遮罩", new[] { "PCSS mask", "PCSS マスク", "PCSS 마스크" } },
+            { "邊緣光遮罩", new[] { "Rim mask", "リムマスク", "림 마스크" } },
             { "選中的 UV 面 → 黑色 → 沒有 PCSS 影子", new[] { "Selected UV faces → black → no PCSS shadow", "選択した UV 面 → 黒 → PCSS の影なし", "선택한 UV 면 → 검은색 → PCSS 그림자 없음" } },
             { "白色 = 有 PCSS 影子／黑色 = 沒有 PCSS 影子（只影響 PCSS，不影響 AO 與 Contact Shadow）。選中的面輸出為黑色，其餘為白色。", new[] { "White = PCSS shadow / black = no PCSS shadow (PCSS only; AO and Contact Shadow are not affected). Selected faces are written black, the rest white.", "白 = PCSS の影あり／黒 = PCSS の影なし（PCSS のみ。AO と Contact Shadow には影響しません）。選択した面が黒、それ以外が白で出力されます。", "흰색 = PCSS 그림자 있음 / 검은색 = PCSS 그림자 없음 (PCSS만 해당, AO와 Contact Shadow에는 영향 없음). 선택한 면은 검은색, 나머지는 흰색으로 출력됩니다." } },
             { "PCSS 遮罩只適用於 lilMCR PCSS 材質（Macaron/PCSS）。請先用 lilMCR PCSS Setup 轉換材質。", new[] { "The PCSS mask is only for lilMCR PCSS materials (Macaron/PCSS). Convert the materials with lilMCR PCSS Setup first.", "PCSS マスクは lilMCR PCSS マテリアル（Macaron/PCSS）専用です。先に lilMCR PCSS Setup でマテリアルを変換してください。", "PCSS 마스크는 lilMCR PCSS 머티리얼(Macaron/PCSS) 전용입니다. 먼저 lilMCR PCSS Setup으로 머티리얼을 변환하세요." } },
