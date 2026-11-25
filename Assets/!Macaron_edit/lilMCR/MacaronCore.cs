@@ -737,7 +737,7 @@ namespace liltoon_MCR
         /// <summary>The last tier (tiers are 0..TierMax).</summary>
         public const int TierMax = TierStyleCyan;
         public const string TierStyleHeader = "風格化";
-        public static readonly string[] TierLabels = { "最輕量", "輕量", "標準", "高品質", "Overkill", "濃影", "軟粉", "軟青" };
+        public static readonly string[] TierLabels = { "最輕量", "輕量", "標準", "高品質", "Overkill", "POI風(濃)", "POI風(軟粉)", "POI風(軟青)" };
         public static readonly string[] TierTooltips =
         {
             "預估成本：角色像素 +40～70%（對比 lilMCR 全關）。",
@@ -747,7 +747,7 @@ namespace liltoon_MCR
             "預估成本：角色像素 +280～500%（對比 lilMCR 全關），PCSS 陰影貼圖另佔約 256 MB 顯示記憶體。",
             "柔和 SSAO（最高品質，每像素 32 次取樣）搭配柔邊的接觸陰影。縫隙的陰影又深又窄，顏色跟著材質本身的顏色。",
             "柔和 SSAO（最高品質，每像素 32 次取樣）搭配細的接觸陰影，陰影帶粉色。粉色會套用到所有材質，要改請調「近處顏色」或把「帶入底色」調回 1。",
-            "和「軟粉」相同的柔和 SSAO 與細接觸陰影，陰影改為淡青色。顏色會套用到所有材質，要改請調「近處顏色」或把「帶入底色」調回 1。",
+            "和「POI風(軟粉)」相同的柔和 SSAO 與細接觸陰影，陰影改為淡青色。顏色會套用到所有材質，要改請調「近處顏色」或把「帶入底色」調回 1。",
         };
 
         private static KeyValuePair<string, Vector4> T(string name, float x, float y, float z, float w)
