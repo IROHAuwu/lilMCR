@@ -4,7 +4,7 @@
 
 **以 lilToon 為基礎的 VRChat 角色著色器與工具組**
 
-![version](https://img.shields.io/badge/version-v1.5.9-ff8fab)
+![version](https://img.shields.io/badge/version-v1.6.0-ff8fab)
 ![lilToon](https://img.shields.io/badge/lilToon-2.x-8ecae6)
 ![platform](https://img.shields.io/badge/VRChat-Avatar-b8a1ff)
 ![UI](https://img.shields.io/badge/UI-繁中%20%7C%20English%20%7C%20日本語%20%7C%20한국어-lightgrey)
@@ -22,7 +22,7 @@ lilMCR（Macaron）是 [lilToon](https://github.com/lilxyzw/lilToon) 2.x 的自�
 | 功能 | 說明 |
 |---|---|
 | **接觸陰影** Contact Shadow | 依光源方向在角色身上產生貼近的陰影，可用遮罩控制範圍 |
-| **遮蔽** Occlusion | 讓凹陷與貼合處變暗，增加立體感，可用遮罩控制範圍 |
+| **遮蔽** Occlusion | 讓凹陷與貼合處變暗，增加立體感。有四種方式可選（SSAO、柔和 SSAO、GTAO、Ray March），可用遮罩控制範圍 |
 | **埋入** Uzumore | 鏡頭進入網格內部時，把頂點推回鏡頭前方，避免穿模看穿 |
 | **僅自己可見** Local Only | lilMCR 的效果只在自己的畫面顯示，其他玩家看到的是一般 lilToon |
 | **自適應畫質** | 依畫面佔比自動調整陰影與遮蔽的品質 |
@@ -34,7 +34,7 @@ lilMCR（Macaron）是 [lilToon](https://github.com/lilxyzw/lilToon) 2.x 的自�
 
 | 工具 | 選單 | 說明 |
 |---|---|---|
-| **角色轉換** | `lilMCR/Avatar Converter` | 放入角色、選好影子方向，一鍵把 lilToon 材質轉成 Macaron。原始材質不會被修改 |
+| **角色轉換** | `lilMCR/Avatar Converter` | 放入角色、選好影子方向，一鍵把 lilToon 材質轉成 Macaron。品質檔次與風格預設一鍵套用。原始材質不會被修改 |
 | **批次設定** | `lilMCR/Batch Settings` | 一次調整整個角色的 Macaron 材質 |
 | **Light Adjuster** | 由轉換工具加入 | 在 VRChat 選單內調整亮度、色溫、飽和度、光源方向，並可開關 lilMCR |
 | **World Shadow** | `World Shadow` | 世界陰影的設定工具 |

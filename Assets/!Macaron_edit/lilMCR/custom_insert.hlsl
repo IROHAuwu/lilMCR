@@ -855,6 +855,111 @@ float MCR_OccCapReach(float reach, float viewDepth, MCRDepthInfo di)
     return reach * scale;
 }
 
+//------------------------------------------------------------------------------------------------------------------------------
+// Soft SSAO: a fixed spiral of points in meters, lifted off the surface (wide, smooth gradients without grain)
+//
+// The points lie on a golden-angle spiral that runs from this pixel out to Radius (meters), each lifted off the surface
+// plane along the smooth normal by Lift (the same lift as Spread of the SSAO above). A point is covered when the depth
+// texture is in front of it. The coverage rises smoothly over one Radius of depth, which is what makes the gradient
+// wide and soft, and fades out again for occluders farther in front than Front Distance.
+//   The kernel is the same for every pixel and only turned by Noise: at Noise 0 neighboring pixels test the same
+//   points and the result is smooth without any grain; a little Noise hides the kernel pattern.
+//   Focus  : how much the points gather near this pixel (as Focus of the other methods: 0 = the whole Radius counts,
+//            1 = mostly the nearest crevices). It is the exponent of the spiral's radius: 0.5 (even over the disc) .. 2.
+//   Lift   : 0 = points in the surface plane (curved surfaces shade themselves), 1 = only along the normal.
+//   Clean  : how much of lilMCR's self-occlusion removal is applied (slope tolerance and depth calibration of the
+//            contact shadow, facet floor of the SSAO above). 0 = none: surfaces turning away from the camera get a
+//            light, even shade of their own; 1 = only real occluders count.
+
+#define MCR_SOFT_MAX_SAMPLES 32
+// Occlusion at Occlusion Amount 1 for the average coverage.
+#define MCR_SOFT_GAIN 2.5
+
+float MCR_CalcSoftAO(MCRSurface s, MCRDepthInfo di)
+{
+    float radius = MCR_OccCapReach(max(_MCR_SoftRadius, 0.0005), s.viewDepth, di);
+    float pixelWeight = MCR_SubPixelFade(radius * di.focalPx / s.viewDepth);
+    int q = MCR_OccQualityLevel();
+    int samples = q == 0 ? 8 : (q == 1 ? 12 : (q == 2 ? 20 : 32));
+    // One exit point only (see MCR_CalcSSAO).
+    if(pixelWeight <= 0.0) samples = 0;
+
+    float clean = saturate(_MCR_SoftClean);
+    float bias = max(_MCR_SoftBias, 0.0);
+    float depthBias = 0.0;
+    [branch]
+    if(clean > 0.0)
+    {
+        // Depth texture precision drops with distance, and a depth texel read at its center differs from the sample
+        // point by up to ~0.7 px of the surface's depth slope (see MCR_CalcContactShadow).
+        float3 viewRay = MCR_ViewRay(s.centerCS, di);
+        float facingRay = abs(dot(s.nView, viewRay)) * rsqrt(max(dot(viewRay, viewRay), MCR_EPS));
+        float slopePx = s.depth * length(s.nView.xy) / (di.focalPx * max(facingRay, 0.05));
+        bias += (s.depth * 0.0003 + min(slopePx, 0.02)) * clean;
+        // The depth texture can hold this surface slightly closer to the camera than this pass draws it.
+        float offset = s.depth - MCR_ReadDepth(s.centerCS, di);
+        depthBias = offset > 0.0 && offset < 0.01 ? offset * clean : 0.0;
+    }
+    float invRadius = 1.0 / radius;
+    // Front Distance (as the SSAO above): occluders farther in front do not count; they fade out over its outer 3/4.
+    // Never shorter than the Radius, so the coverage can reach its full value.
+    float rangeEnd = max(_MCR_SoftDepthReach, radius * 1.25);
+    float rangeStart = max(rangeEnd * 0.25, radius);
+    float spiralPower = lerp(0.5, 2.0, saturate(_MCR_SoftFocus));
+    float liftAmount = saturate(_MCR_SoftLift);
+    float rotate = MCR_IGN(s.centerCS) * saturate(_MCR_OccNoise) * MCR_TWO_PI;
+
+    // Sample frame in clip space: a sample is origin + T*a + B*b + N*c (3 multiply-adds, no matrix per sample).
+    float3 axisT;
+    float3 axisB;
+    MCR_OrthoBasis(s.nView, axisT, axisB);
+    float4 clipO = mul(LIL_MATRIX_P, float4(s.positionVS, 1.0));
+    float4 clipT = mul(LIL_MATRIX_P, float4(axisT * radius, 0.0));
+    float4 clipB = mul(LIL_MATRIX_P, float4(axisB * radius, 0.0));
+    float4 clipN = mul(LIL_MATRIX_P, float4(s.nView * radius, 0.0));
+    float2 pxFix = s.centerCS - MCR_ClipToEyePixel(clipO, di);
+    // Facet floor (as MCR_CalcSSAO): the points follow the smooth normal, the depth texture holds the triangles.
+    float3 facetH = float3(dot(axisT, s.nFacet), dot(axisB, s.nFacet), dot(s.nView, s.nFacet));
+    float4 clipF = mul(LIL_MATRIX_P, float4(s.nFacet * radius, 0.0));
+
+    float occ = 0.0;
+    [loop]
+    for(int i = 0; i < MCR_SOFT_MAX_SAMPLES; i++)
+    {
+        if(i >= samples) break;
+        float u = ((float)i + 0.5) / (float)samples;
+        // Golden-angle spiral (as MCR_CalcSSAO). Radius exponent 0.5 spreads the points evenly over the disc; a larger
+        // one gathers them near this pixel.
+        float len = pow(u, spiralPower);
+        float sn;
+        float cs;
+        sincos((float)i * 2.39996323 + rotate, sn, cs);
+        // Lifted along the normal (as Spread in MCR_CalcSSAO); normalized, so every point is exactly len x Radius away.
+        float3 d = float3(cs * (1.0 - liftAmount), sn * (1.0 - liftAmount), liftAmount);
+        d *= len * rsqrt(max(dot(d, d), MCR_EPS));
+        float lift = max(len * MCR_SSAO_FACET_LIFT - dot(d, facetH), 0.0) * clean;
+        float4 clip = clipO + clipT * d.x + clipB * d.y + clipN * d.z + clipF * lift;
+        [branch]
+        if(clip.w <= 0.01) continue;
+        float2 px = MCR_ClipToEyePixel(clip, di) + pxFix;
+        float sceneDepth = MCR_ReadDepth(px, di);
+        // > 0: the depth texture is in front of the sample point (clip.w = its view depth).
+        float delta = clip.w - sceneDepth - depthBias - bias;
+        [branch]
+        if(delta <= 0.0) continue;
+        occ += smoothstep(0.0, 1.0, delta * invRadius) * (1.0 - smoothstep(rangeStart, rangeEnd, delta));
+    }
+    occ /= (float)max(samples, 1);
+
+    // Edge Rejection: surfaces seen nearly edge-on (the silhouette) have unreliable neighbors in the depth texture.
+    float3 viewDir = -s.positionVS * rsqrt(max(dot(s.positionVS, s.positionVS), MCR_EPS));
+    float facing = saturate(dot(s.nView, viewDir));
+    occ *= lerp(1.0, smoothstep(0.0, 0.35, facing), saturate(_MCR_SSAOEdgeReject));
+
+    float ao = saturate(occ * MCR_SOFT_GAIN * max(_MCR_OccAmount, 0.0));
+    return MCR_OccContrastMap(ao) * pixelWeight;
+}
+
 // Focus 0 = far occluders count almost as much as near ones, 1 = only the nearest crevices.
 float MCR_OccFocusPower()
 {
@@ -1024,6 +1129,12 @@ float3 MCR_RayMarchSums(MCRSurface s, MCRDepthInfo di, float reach, MCRRaySet se
         float cp;
         sincos(phi, sp, cp);
         float3 dir = (axisA * cp + axisB * sp) * sinTheta + s.nView * cosTheta;
+        // Facet floor (as MCR_CalcSSAO): the directions follow the smooth normal, but the depth texture holds the
+        // triangles. Where the two disagree (edited normals, a vertex normal that points away from the camera), part of
+        // the rays would start out below the triangle itself and hit it a few millimeters on: a shade over the whole
+        // surface, in one band per triangle. Every direction is kept at least MCR_SSAO_FACET_LIFT above the triangle.
+        float below = MCR_SSAO_FACET_LIFT - dot(dir, s.nFacet);
+        if(below > 0.0) dir = normalize(dir + s.nFacet * below);
         MCRClipRay cr;
         cr.origin = clipOrigin;
         cr.dir = mul(LIL_MATRIX_P, float4(dir, 0.0));
@@ -1412,10 +1523,13 @@ struct MCRShadowRay
     float2 pxCorrection;
     float maxDist;
     float thickness;     // base thickness + slope tolerance (see MCR_CalcContactShadow)
+    float edge;          // depth behind the occluder over which the hit rises to full
     float rejectDist;
     float depthBias;     // how far the depth texture sits in front of this surface at this pixel (>= 0)
 };
 
+// Gradual hit: the hit rises to full over this fraction of the shadow length behind the occluder (plus the thickness).
+#define MCR_SHADOW_EDGE_FRAC 0.15
 // tan of the bend between neighboring triangles that still counts as one surface (triangle plane test in MCR_ShadowBlock).
 #define MCR_FACET_BEND 0.18
 
@@ -1439,7 +1553,7 @@ float MCR_ShadowBlock(MCRShadowRay r, MCRSurface s, MCRDepthInfo di, float t, in
     float diff = clip.w - sceneDepth - _MCR_ShadowOffset.x;
     [branch]
     if(diff <= r.thickness * 0.5 || diff >= r.rejectDist) return 0.0;
-    float h = smoothstep(r.thickness * 0.5, r.thickness * 1.5, diff);
+    float h = smoothstep(r.thickness * 0.5, r.thickness * 0.5 + r.edge, diff);
     // Far in front = other player / object between camera and avatar -> not an occluder.
     h *= 1.0 - smoothstep(r.rejectDist * 0.7, r.rejectDist, diff);
 
@@ -1529,6 +1643,10 @@ float MCR_CalcContactShadow(MCRSurface s, MCRDepthInfo di, out float backShade)
     // Facing away from the light or sub-pixel: no rays (the loop ends at once; backShade was already evaluated). One
     // exit point only: early returns made the d3d11 compiler warn about a potentially uninitialized return value.
     if(normalWeight <= 0.0 || pixelWeight <= 0.0 || grazingWeight <= 0.0) rayCount = 0;
+    // Gradual hit: a ray that only just passes behind an occluder (the rim of the shadow) is shaded a little, one that
+    // goes deeper behind it fully. The depth over which it rises grows with the shadow length, so a long shadow gets
+    // a soft rim instead of a hard, stepped one; never narrower than the thickness.
+    r.edge = r.thickness + r.maxDist * MCR_SHADOW_EDGE_FRAC;
     int stepCount = (int)clamp(ceil(lengthPx / 4.0), (float)baseSteps, (float)maxSteps);
     // Steps still longer than ~3 px: offset them per pixel so thin occluders do not repeat as layers.
     float stepPx = lengthPx / (float)stepCount;
@@ -1565,6 +1683,7 @@ float MCR_CalcContactShadow(MCRSurface s, MCRDepthInfo di, out float backShade)
         MCRDepthCache cache = (MCRDepthCache)0;
         float hit = 0.0;
         float prevT = 0.0;
+        float entry = -1.0;     // where the ray enters the nearest occluder (< 0: not found yet)
         [loop]
         for(int i = 0; i < 48; i++)
         {
@@ -1574,7 +1693,8 @@ float MCR_CalcContactShadow(MCRSurface s, MCRDepthInfo di, out float backShade)
             float h = MCR_ShadowBlock(r, s, di, t, cache, valid);
             if(!valid) break;
 
-            if(h > 0.5)
+            [branch]
+            if(h > 0.5 && entry < 0.0)
             {
                 // First solid hit = nearest occluder. Find where the ray enters it (3 halvings) so the length fade
                 // is continuous instead of jumping from step to step (the layered look of long shadows).
@@ -1589,10 +1709,12 @@ float MCR_CalcContactShadow(MCRSurface s, MCRDepthInfo di, out float backShade)
                     if(MCR_ShadowBlock(r, s, di, mid, cache, midValid) > 0.5 && midValid) hi = mid;
                     else lo = mid;
                 }
-                hit = max(hit, h * (1.0 - smoothstep(0.65, 1.0, hi)));
-                break;
+                entry = hi;
             }
-            hit = max(hit, h * (1.0 - smoothstep(0.65, 1.0, t)));   // fade at the end of the ray
+            // Fade at the end of the ray, measured where the occluder begins once that is known.
+            hit = max(hit, h * (1.0 - smoothstep(0.65, 1.0, entry >= 0.0 ? entry : t)));
+            // Fully behind the occluder: nothing darker can follow. A partial hit marches on, the ray may go deeper.
+            if(h > 0.98) break;
             prevT = t;
         }
         total += hit;
@@ -1824,7 +1946,7 @@ void Macaron_Apply(inout lilFragData fd)
     bool useOcc = amount > 0.0 && _MCR_OccEnable > 0.5 && _MCR_OccAmount > 0.0;
     bool useShadow = amount > 0.0 && _MCR_ShadowEnable > 0.5 && _MCR_ShadowIntensity > 0.0;
     if(!(useOcc || useShadow)) return;
-    int method = (int)round(_MCR_OccMethod);   // 0 SSAO, 1 Ray March, 2 GTAO
+    int method = (int)round(_MCR_OccMethod);   // 0 SSAO, 1 Ray March, 2 GTAO, 3 Soft SSAO
 
     // Masks are sampled before any per-pixel early return (implicit gradients), and only for the features in use
     // (a mask with amount 0 is not read at all; the condition is per material, so it is uniform).
@@ -1992,6 +2114,12 @@ void Macaron_Apply(inout lilFragData fd)
     if(active && useOcc && !covered && method == 0)
     {
         occ = MCR_CalcSSAO(s, di) * occMask;
+    }
+
+    [branch]
+    if(active && useOcc && !covered && method == 3)
+    {
+        occ = MCR_CalcSoftAO(s, di) * occMask;
     }
 
     [branch]

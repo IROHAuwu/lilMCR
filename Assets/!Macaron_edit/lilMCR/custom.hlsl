@@ -40,6 +40,12 @@
     float _MCR_SSAOBias; \
     float _MCR_SSAOSpread; \
     float _MCR_SSAOEdgeReject; \
+    float _MCR_SoftRadius; \
+    float _MCR_SoftFocus; \
+    float _MCR_SoftLift; \
+    float _MCR_SoftBias; \
+    float _MCR_SoftDepthReach; \
+    float _MCR_SoftClean; \
     float _MCR_OccReach; \
     float _MCR_OccFocus; \
     float _MCR_OccThickness; \

@@ -201,7 +201,7 @@ namespace liltoon_MCR
             EditorGUILayout.LabelField(ML.T("轉換時統一最低亮度 0.06、最高亮度 1；Fur 材質關閉 AO 與接觸陰影。"), EditorStyles.wordWrappedMiniLabel);
             // Quality tier written to every converted / reset material.
             EditorGUILayout.LabelField(ML.T("品質檔次"), EditorStyles.boldLabel);
-            int tier = Mathf.Clamp(EditorPrefs.GetInt(PrefTier, MacaronCore.TierStandard), 0, MacaronCore.TierOverkill);
+            int tier = Mathf.Clamp(EditorPrefs.GetInt(PrefTier, MacaronCore.TierStandard), 0, MacaronCore.TierMax);
             int picked = MacaronGUI.TierButtons(tier);
             if(picked >= 0) EditorPrefs.SetInt(PrefTier, picked);
             GUILayout.Space(4f);
@@ -631,7 +631,7 @@ namespace liltoon_MCR
             int undoGroup = Undo.GetCurrentGroup();
 
             bool depthSourceAdded = EnsureDepthSource();
-            int tier = Mathf.Clamp(EditorPrefs.GetInt(PrefTier, MacaronCore.TierStandard), 0, MacaronCore.TierOverkill);
+            int tier = Mathf.Clamp(EditorPrefs.GetInt(PrefTier, MacaronCore.TierStandard), 0, MacaronCore.TierMax);
 
             Dictionary<Material, Material> result = new Dictionary<Material, Material>(plan.Count);
             string folder = MacaronCore.ConvertedFolder + "/" + MacaronCore.SafeFileName(avatar.name);

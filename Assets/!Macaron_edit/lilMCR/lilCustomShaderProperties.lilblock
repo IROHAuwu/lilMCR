@@ -16,7 +16,7 @@
 
         // Occlusion
         [ToggleUI] _MCR_OccEnable ("Occlusion", Float) = 1
-        _MCR_OccMethod ("Occlusion Method (0 SSAO / 1 Ray March / 2 GTAO)", Float) = 1
+        _MCR_OccMethod ("Occlusion Method (0 SSAO / 1 Ray March / 2 GTAO / 3 Soft SSAO)", Float) = 1
         _MCR_OccQuality ("Occlusion Quality (0 Light / 1 Standard / 4 Standard no 2x2 / 2 Fine / 3 Best)", Float) = 1
         [ToggleUI] _MCR_OccScreenLOD ("Adaptive Screen Quality", Float) = 1
         _MCR_OccAmount ("Occlusion Amount", Range(0, 4)) = 1
@@ -35,6 +35,12 @@
         _MCR_SSAOBias ("SSAO Self-Occlusion Tolerance (m)", Range(0, 0.005)) = 0.0008
         _MCR_SSAOSpread ("SSAO Spread", Range(0, 1)) = 0.35
         _MCR_SSAOEdgeReject ("SSAO Edge Rejection", Range(0, 1)) = 0.3
+        _MCR_SoftRadius ("Soft SSAO Radius (m)", Range(0.002, 0.1)) = 0.0165
+        _MCR_SoftDepthReach ("Soft SSAO Front Distance (m)", Range(0.01, 0.3)) = 0.3
+        _MCR_SoftFocus ("Soft SSAO Focus", Range(0, 1)) = 0.22
+        _MCR_SoftLift ("Soft SSAO Lift", Range(0, 1)) = 0.09
+        _MCR_SoftBias ("Soft SSAO Self-Occlusion Tolerance (m)", Range(0, 0.01)) = 0.0025
+        _MCR_SoftClean ("Soft SSAO Clean", Range(0, 1)) = 0.4
         _MCR_OccReach ("Occlusion Reach (m)", Range(0.002, 0.15)) = 0.02
         _MCR_OccFocus ("Occlusion Focus", Range(0, 1)) = 0.5
         _MCR_OccThickness ("Occlusion Thickness (m)", Range(0.002, 0.08)) = 0.015

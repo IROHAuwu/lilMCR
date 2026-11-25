@@ -181,13 +181,15 @@ namespace liltoon_MCR
         }
         private static MacaronProp Head(MacaronProp p, string subHeader) { p.SubHeader = subHeader; return p; }
 
-        // 0 SSAO / 1 Ray March / 2 GTAO
+        // 0 SSAO / 1 Ray March / 2 GTAO / 3 Soft SSAO
         private static int OccMethodOf(Func<string, float> g) { return Mathf.RoundToInt(g("_MCR_OccMethod")); }
         private static bool IsSSAO(Func<string, float> g) { return OccMethodOf(g) == 0; }
         private static bool IsRay(Func<string, float> g) { return OccMethodOf(g) == 1; }
         private static bool IsGTAO(Func<string, float> g) { return OccMethodOf(g) == 2; }
+        private static bool IsSoft(Func<string, float> g) { return OccMethodOf(g) == 3; }
+        private static bool IsSSAOOrSoft(Func<string, float> g) { return IsSSAO(g) || IsSoft(g); }
         // Settings shared by Ray March and GTAO (Focus, Thickness, scale mode, far tint).
-        private static bool IsMetric(Func<string, float> g) { return OccMethodOf(g) != 0; }
+        private static bool IsMetric(Func<string, float> g) { return IsRay(g) || IsGTAO(g); }
 
         private static List<MacaronSection> BuildSections()
         {
@@ -219,7 +221,7 @@ namespace liltoon_MCR
 
             //--------------------------------------------------------------------------------------
             MacaronSection occ = new MacaronSection { Id = "occ", Title = "遮蔽（環境光遮蔽）", EnableProp = "_MCR_OccEnable" };
-            occ.Props.Add(Popup("_MCR_OccMethod", "方式", new[] { "SSAO（輕量）", "光線步進 Ray March（高負擔）", "GTAO（中負擔）" }, new[] { 0f, 1f, 2f },
+            occ.Props.Add(Popup("_MCR_OccMethod", "方式", new[] { "SSAO（輕量）", "柔和 SSAO（輕量）", "光線步進 Ray March（高負擔）", "GTAO（中負擔）" }, new[] { 0f, 3f, 1f, 2f },
                 "Ray March 效能負擔比 SSAO 高。GTAO 依遮蔽物的角度計算被遮住的比例，陰影柔和且遠近一致。"));
             // "Standard (no 2x2)" only differs from Standard in Ray March (2x2 quad share); SSAO / GTAO do not offer it.
             occ.Props.Add(HideOptions(Popup("_MCR_OccQuality", "品質", new[] { "輕量", "標準", "標準（無 2×2）", "精細", "最高" }, new[] { 0f, 1f, 4f, 2f, 3f },
@@ -238,7 +240,20 @@ namespace liltoon_MCR
             occ.Props.Add(When(P("_MCR_SSAOSpread", "陰影傾向", MacaronPropKind.Slider,
                 "0 = 強調輪廓與縫隙、1 = 像落影一樣在突出物下方大片變暗。"), IsSSAO));
             occ.Props.Add(When(Adv(P("_MCR_SSAOEdgeReject", "輪廓抑制", MacaronPropKind.Slider,
-                "減弱幾乎側對鏡頭的面（角色外輪廓）上的遮蔽，消除黑色描邊。")), IsSSAO));
+                "減弱幾乎側對鏡頭的面（角色外輪廓）上的遮蔽，消除黑色描邊。")), IsSSAOOrSoft));
+
+            // Soft SSAO: same labels / help as the other methods where the control means the same.
+            occ.Props.Add(When(P("_MCR_SoftRadius", "範圍 (m)", MacaronPropKind.Slider, "多遠的遮蔽物會影響這一點。"), IsSoft));
+            occ.Props.Add(When(P("_MCR_SoftDepthReach", "前後距離 (m)", MacaronPropKind.Slider,
+                "遮蔽物最遠可以離這一點多遠（例如稍微離開臉的頭髮、離開胸口的手）。只影響前後，影子往左右擴張的寬度由「範圍」決定。"), IsSoft));
+            occ.Props.Add(When(P("_MCR_SoftFocus", "集中度", MacaronPropKind.Slider,
+                "0 = 範圍內平均取樣（漸層較寬）、1 = 集中在這一點附近（縫隙較深、外圍較淡）。"), IsSoft));
+            occ.Props.Add(When(Adv(P("_MCR_SoftLift", "離面程度", MacaronPropKind.Slider,
+                "取樣點離開表面的程度。0 = 貼著表面（彎曲的面會自己變暗）、1 = 只沿著法線方向。")), IsSoft));
+            occ.Props.Add(When(Adv(P("_MCR_SoftBias", "自我遮蔽容許 (m)", MacaronPropKind.Slider,
+                "高出平滑表面不到這個距離的部分視為表面本身。出現一格一格的陰影時稍微加大。")), IsSoft));
+            occ.Props.Add(When(Adv(P("_MCR_SoftClean", "去除自我遮蔽", MacaronPropKind.Slider,
+                "0 = 不處理：背向鏡頭轉過去的面會整片淡淡變暗（較柔和）。1 = 只有真正被擋住的地方變暗（較乾淨）。")), IsSoft));
 
             occ.Props.Add(When(P("_MCR_OccReach", "範圍 (m)", MacaronPropKind.Slider, "多遠的遮蔽物會影響這一點。"), IsRay));
             // GTAO has its own Reach with a smaller range of values (same label and help, so the translations are shared).
@@ -661,6 +676,14 @@ namespace liltoon_MCR
             new KeyValuePair<string, Vector4>("_MCR_SSAODepthReach", new Vector4(0.01f, 0, 0, 0)),
         };
 
+        // Soft SSAO starting values of the shared settings (its own settings start from the shader defaults).
+        private static readonly KeyValuePair<string, Vector4>[] SoftSharedStart =
+        {
+            new KeyValuePair<string, Vector4>("_MCR_OccQuality", new Vector4(1f, 0, 0, 0)),
+            new KeyValuePair<string, Vector4>("_MCR_OccAmount", new Vector4(0.8f, 0, 0, 0)),
+            new KeyValuePair<string, Vector4>("_MCR_OccNoise", new Vector4(0.2f, 0, 0, 0)),
+        };
+
         private static string OccStoreTagName(int method) { return OccStoreTag + method; }
 
         /// <summary>Changes the occlusion method of a material, keeping each method's own shared settings.
@@ -689,8 +712,9 @@ namespace liltoon_MCR
             }
             else
             {
-                // First switch to Ray March / GTAO: the shared settings start from the shader defaults.
+                // First switch to Ray March / GTAO / Soft SSAO: the shared settings start from the shader defaults.
                 foreach(string name in OccSharedProps) ResetPropertyToDefault(m, name);
+                if(to == 3) foreach(var kv in SoftSharedStart) SetValue(m, kv.Key, kv.Value);
             }
             // SSAO / GTAO have no 2x2 share: "Standard (no 2x2)" is the same as Standard there and is not offered.
             if(to != 1 && m.HasProperty("_MCR_OccQuality") && Mathf.Approximately(m.GetFloat("_MCR_OccQuality"), OccQualityNo2x2))
@@ -707,14 +731,23 @@ namespace liltoon_MCR
         // per-method settings of the method that is left are kept for a later manual switch.
 
         public const int TierLightest = 0, TierLight = 1, TierStandard = 2, TierHigh = 3, TierOverkill = 4;
-        public static readonly string[] TierLabels = { "最輕量", "輕量", "標準", "高品質", "Overkill" };
+        // Styles follow the quality tiers (TierStyleFirst..TierMax); the buttons show them in a block of their own.
+        public const int TierStyleDeep = 5, TierStylePink = 6, TierStyleCyan = 7;
+        public const int TierStyleFirst = TierStyleDeep;
+        /// <summary>The last tier (tiers are 0..TierMax).</summary>
+        public const int TierMax = TierStyleCyan;
+        public const string TierStyleHeader = "風格化";
+        public static readonly string[] TierLabels = { "最輕量", "輕量", "標準", "高品質", "Overkill", "濃影", "軟粉", "軟青" };
         public static readonly string[] TierTooltips =
         {
             "預估成本：角色像素 +40～70%（對比 lilMCR 全關）。",
             "預估成本：角色像素 +60～100%（對比 lilMCR 全關）。",
-            "預估成本：角色像素 +90～150%（對比 lilMCR 全關）。",
+            "預估成本：角色像素 +110～190%（對比 lilMCR 全關）。",
             "預估成本：角色像素 +80～140%（對比 lilMCR 全關）。",
             "預估成本：角色像素 +280～500%（對比 lilMCR 全關），PCSS 陰影貼圖另佔約 256 MB 顯示記憶體。",
+            "柔和 SSAO（最高品質，每像素 32 次取樣）搭配柔邊的接觸陰影。縫隙的陰影又深又窄，顏色跟著材質本身的顏色。",
+            "柔和 SSAO（最高品質，每像素 32 次取樣）搭配細的接觸陰影，陰影帶粉色。粉色會套用到所有材質，要改請調「近處顏色」或把「帶入底色」調回 1。",
+            "和「軟粉」相同的柔和 SSAO 與細接觸陰影，陰影改為淡青色。顏色會套用到所有材質，要改請調「近處顏色」或把「帶入底色」調回 1。",
         };
 
         private static KeyValuePair<string, Vector4> T(string name, float x, float y, float z, float w)
@@ -797,6 +830,12 @@ namespace liltoon_MCR
             T("_MCR_SSAODepthReach", 0.04f, 0f, 0f, 0f),
             T("_MCR_SSAOBias", 0.0008f, 0f, 0f, 0f),
             T("_MCR_SSAOSpread", 0.35f, 0f, 0f, 0f),
+            T("_MCR_SoftBias", 0.0025f, 0f, 0f, 0f),
+            T("_MCR_SoftClean", 0.4f, 0f, 0f, 0f),
+            T("_MCR_SoftDepthReach", 0.3f, 0f, 0f, 0f),
+            T("_MCR_SoftFocus", 0.22f, 0f, 0f, 0f),
+            T("_MCR_SoftLift", 0.09f, 0f, 0f, 0f),
+            T("_MCR_SoftRadius", 0.0165f, 0f, 0f, 0f),
             T("_MCR_SSAOEdgeReject", 0.3f, 0f, 0f, 0f),
             T("_MCR_ShadowColor", 0.21960777f, 0.21960777f, 0.21960777f, 1f),
             T("_MCR_ShadowOffset", 0f, 0.001f, 0f, 0f),
@@ -842,7 +881,7 @@ namespace liltoon_MCR
         private static readonly KeyValuePair<string, Vector4>[] StandardOverrides =
         {
             T("_MCR_OccMethod", 2f, 0f, 0f, 0f),
-            T("_MCR_OccQuality", 1f, 0f, 0f, 0f),
+            T("_MCR_OccQuality", 2f, 0f, 0f, 0f),
             T("_MCR_OccAmount", 1f, 0f, 0f, 0f),
             T("_MCR_OccNoise", 1f, 0f, 0f, 0f),
             T("_MCR_OccTintNear", 0.424528122f, 0.422525644f, 0.422525644f, 1f),
@@ -871,9 +910,73 @@ namespace liltoon_MCR
         private static readonly KeyValuePair<string, Vector4>[] TierOverkill_ = WithOverrides(new[]
         {
             T("_MCR_OccQuality", 3f, 0f, 0f, 0f),
+            // Enough directions at this quality for a mostly fixed pattern: far less grain.
+            T("_MCR_OccNoise", 0.2f, 0f, 0f, 0f),
             T("_MCR_ShadowQuality", 3f, 0f, 0f, 0f),
             T("_lilMCRPCSS_MinBlur", 3f, 0f, 0f, 0f),
             T("_lilMCRPCSS_Quality", 3f, 0f, 0f, 0f),
+        });
+
+        // Styles: looks to choose from, shown in their own block under the quality tiers. Each one is a tier of its own
+        // (the High table with its overrides), so it can be applied, recorded and replaced like any other tier.
+
+        // Deep soft creases: Soft SSAO at its best quality with a short Radius gathered near the pixel and the
+        // contrast curve at its strongest (narrow, deep crease shading in the material's own color), and a soft-edged
+        // contact shadow without the back side shade.
+        private static readonly KeyValuePair<string, Vector4>[] TierStyleDeep_ = WithOverrides(new[]
+        {
+            T("_MCR_OccMethod", 3f, 0f, 0f, 0f),
+            T("_MCR_OccQuality", 3f, 0f, 0f, 0f),
+            T("_MCR_OccAmount", 1f, 0f, 0f, 0f),
+            T("_MCR_OccContrast", -1f, 0f, 0f, 0f),
+            T("_MCR_OccNoise", 0.2f, 0f, 0f, 0f),
+            T("_MCR_OccAlbedoTint", 1f, 0f, 0f, 0f),
+            T("_MCR_OccTintNear", 0f, 0f, 0f, 1f),
+            T("_MCR_SSAOEdgeReject", 0.3f, 0f, 0f, 0f),
+            T("_MCR_SoftRadius", 0.004f, 0f, 0f, 0f),
+            T("_MCR_SoftDepthReach", 0.3f, 0f, 0f, 0f),
+            T("_MCR_SoftFocus", 0.7f, 0f, 0f, 0f),
+            T("_MCR_SoftLift", 0.09f, 0f, 0f, 0f),
+            T("_MCR_SoftBias", 0f, 0f, 0f, 0f),
+            T("_MCR_SoftClean", 1f, 0f, 0f, 0f),
+            T("_MCR_ShadowIntensity", 0.7f, 0f, 0f, 0f),
+            T("_MCR_ShadowColor", 0f, 0f, 0f, 1f),
+            T("_MCR_ShadowLength", 0.0079f, 0f, 0f, 0f),
+            T("_MCR_ShadowSoftness", 12.69f, 0f, 0f, 0f),
+            T("_MCR_ShadowQuality", 2f, 0f, 0f, 0f),
+            T("_MCR_ShadowJitter", 1f, 0f, 0f, 0f),
+            T("_MCR_ShadowBackShade", 0f, 0f, 0f, 0f),
+        });
+
+        // Soft pink: Soft SSAO at its best quality with a wide, gentle falloff, and a thin contact shadow without the
+        // back side shade. The shading is a fixed skin-shadow pink on every material (Albedo Tint off).
+        private static readonly KeyValuePair<string, Vector4>[] StylePinkOverrides =
+        {
+            T("_MCR_OccMethod", 3f, 0f, 0f, 0f),
+            T("_MCR_OccQuality", 3f, 0f, 0f, 0f),
+            T("_MCR_OccAmount", 0.8f, 0f, 0f, 0f),
+            T("_MCR_OccNoise", 0.2f, 0f, 0f, 0f),
+            T("_MCR_OccAlbedoTint", 0f, 0f, 0f, 0f),
+            T("_MCR_OccTintNear", 0.856f, 0.698f, 0.724f, 1f),
+            T("_MCR_SoftRadius", 0.0165f, 0f, 0f, 0f),
+            T("_MCR_SoftDepthReach", 0.3f, 0f, 0f, 0f),
+            T("_MCR_SoftFocus", 0.22f, 0f, 0f, 0f),
+            T("_MCR_SoftLift", 0.09f, 0f, 0f, 0f),
+            T("_MCR_SoftBias", 0.0025f, 0f, 0f, 0f),
+            T("_MCR_SoftClean", 0.4f, 0f, 0f, 0f),
+            T("_MCR_ShadowIntensity", 0.5f, 0f, 0f, 0f),
+            T("_MCR_ShadowColor", 0.896f, 0.706f, 0.769f, 1f),
+            T("_MCR_ShadowJitter", 1f, 0f, 0f, 0f),
+            T("_MCR_ShadowBackShade", 0f, 0f, 0f, 0f),
+        };
+        private static readonly KeyValuePair<string, Vector4>[] TierStylePink_ = WithOverrides(StylePinkOverrides);
+
+        // Soft cyan: Soft pink with a pale cyan (#B2C9DA) for both the occlusion tint and the contact shadow.
+        // (Soft SSAO only uses the near tint; the far tint is left alone so it cannot leak into another method.)
+        private static readonly KeyValuePair<string, Vector4>[] TierStyleCyan_ = WithOverrides(StylePinkOverrides, new[]
+        {
+            T("_MCR_OccTintNear", 0.698f, 0.788f, 0.855f, 1f),
+            T("_MCR_ShadowColor", 0.698f, 0.788f, 0.855f, 1f),
         });
 
         // The base table with the override lists applied in order (a later list wins).
@@ -898,6 +1001,9 @@ namespace liltoon_MCR
                 case TierLight: return TierLight_;
                 case TierHigh: return TierHigh_;
                 case TierOverkill: return TierOverkill_;
+                case TierStyleDeep: return TierStyleDeep_;
+                case TierStylePink: return TierStylePink_;
+                case TierStyleCyan: return TierStyleCyan_;
                 default: return TierStandard_;
             }
         }
@@ -916,7 +1022,7 @@ namespace liltoon_MCR
                 if(kv.Key == PropOccMethod) continue;
                 SetValue(m, kv.Key, kv.Value);
             }
-            int applied = tier >= TierLightest && tier <= TierOverkill ? tier : TierStandard;
+            int applied = tier >= TierLightest && tier <= TierMax ? tier : TierStandard;
             m.SetOverrideTag(TierTag, applied.ToString(System.Globalization.CultureInfo.InvariantCulture));
             m.SetOverrideTag(LegacyTierTag, "");
             // Uzumore Reach / Layer Offset are back at the defaults until MacaronUzumore.Setup runs for the avatar.
@@ -937,7 +1043,7 @@ namespace liltoon_MCR
             var ci = System.Globalization.CultureInfo.InvariantCulture;
             int t;
             if(int.TryParse(m.GetTag(TierTag, false, ""), ns, ci, out t))
-                return t >= TierLightest && t <= TierOverkill ? t : -1;
+                return t >= TierLightest && t <= TierMax ? t : -1;
             if(int.TryParse(m.GetTag(LegacyTierTag, false, ""), ns, ci, out t) && t >= 0 && t < LegacyTierMap.Length)
                 return LegacyTierMap[t];
             return -1;
@@ -947,7 +1053,7 @@ namespace liltoon_MCR
         public static int AppliedTier(GameObject avatar)
         {
             if(avatar == null) return -1;
-            int[] votes = new int[TierOverkill + 1];
+            int[] votes = new int[TierMax + 1];
             var seen = new HashSet<Material>();
             foreach(Renderer r in avatar.GetComponentsInChildren<Renderer>(true))
             {
@@ -1417,21 +1523,47 @@ namespace liltoon_MCR
             GUI.Label(r, text, chipStyle);
         }
 
-        /// <summary>The quality tier buttons in one row. Returns the tier clicked, or -1.</summary>
+        // Style buttons per row (the block grows by rows as styles are added).
+        private const int StylesPerRow = 3;
+
+        /// <summary>The quality tier buttons in one row and, under them, the style buttons in a block of their own.
+        /// Returns the tier clicked, or -1.</summary>
         public static int TierButtons(int highlighted = -1)
         {
             int clicked = -1;
             Color old = GUI.backgroundColor;
             using(new EditorGUILayout.HorizontalScope())
             {
-                for(int i = 0; i < MacaronCore.TierLabels.Length; i++)
+                for(int i = 0; i < MacaronCore.TierStyleFirst; i++)
                 {
                     GUI.backgroundColor = i == highlighted ? Accent : old;
-                    if(GUILayout.Button(new GUIContent(ML.T(MacaronCore.TierLabels[i]), ML.T(MacaronCore.TierTooltips[i])), GUILayout.Height(24f))) clicked = i;
+                    if(TierButton(i)) clicked = i;
+                }
+            }
+            GUI.backgroundColor = old;
+            GUILayout.Space(2f);
+            EditorGUILayout.LabelField(ML.T(MacaronCore.TierStyleHeader), EditorStyles.miniBoldLabel);
+            for(int first = MacaronCore.TierStyleFirst; first <= MacaronCore.TierMax; first += StylesPerRow)
+            {
+                using(new EditorGUILayout.HorizontalScope())
+                {
+                    for(int n = 0; n < StylesPerRow; n++)
+                    {
+                        int i = first + n;
+                        // An unfinished row keeps the button width of a full one.
+                        if(i > MacaronCore.TierMax) { GUILayout.Label(GUIContent.none, GUILayout.Height(24f)); continue; }
+                        GUI.backgroundColor = i == highlighted ? Accent : old;
+                        if(TierButton(i)) clicked = i;
+                    }
                 }
             }
             GUI.backgroundColor = old;
             return clicked;
+        }
+
+        private static bool TierButton(int tier)
+        {
+            return GUILayout.Button(new GUIContent(ML.T(MacaronCore.TierLabels[tier]), ML.T(MacaronCore.TierTooltips[tier])), GUILayout.Height(24f));
         }
 
         public static bool BigButton(string text, float height)

@@ -4,7 +4,7 @@
 
 **A lilToon-based avatar shader and toolset for VRChat**
 
-![version](https://img.shields.io/badge/version-v1.5.9-ff8fab)
+![version](https://img.shields.io/badge/version-v1.6.0-ff8fab)
 ![lilToon](https://img.shields.io/badge/lilToon-2.x-8ecae6)
 ![platform](https://img.shields.io/badge/VRChat-Avatar-b8a1ff)
 ![UI](https://img.shields.io/badge/UI-English%20%7C%20繁中%20%7C%20日本語%20%7C%20한국어-lightgrey)
@@ -22,7 +22,7 @@ It keeps lilToon's look and settings and adds contact shadows, occlusion and lig
 | Feature | Description |
 |---|---|
 | **Contact Shadow** | Tight shadows on the avatar that follow the light direction. The affected area can be limited with a mask |
-| **Occlusion** | Darkens creases and areas where surfaces meet for more depth. The affected area can be limited with a mask |
+| **Occlusion** | Darkens creases and areas where surfaces meet for more depth. Four methods to choose from (SSAO, Soft SSAO, GTAO, Ray March). The affected area can be limited with a mask |
 | **Uzumore** | When the camera goes inside a mesh, vertices are pushed back in front of the camera so you can't see through it |
 | **Local Only** | lilMCR effects are shown only on your own client; other players see regular lilToon |
 | **Adaptive Screen Quality** | Shadow and occlusion quality adjusts to how much of the screen the avatar covers |
@@ -34,7 +34,7 @@ Found under **`Macaron`** in the Unity menu bar.
 
 | Tool | Menu | Description |
 |---|---|---|
-| **Avatar Converter** | `lilMCR/Avatar Converter` | Drop in an avatar, pick the shadow direction, and convert its lilToon materials to Macaron in one click. Original materials are never modified |
+| **Avatar Converter** | `lilMCR/Avatar Converter` | Drop in an avatar, pick the shadow direction, and convert its lilToon materials to Macaron in one click. Quality tiers and style presets are applied with one button. Original materials are never modified |
 | **Batch Settings** | `lilMCR/Batch Settings` | Edit every Macaron material on an avatar at once |
 | **Light Adjuster** | Added from the converter | Adjust brightness, color temperature, saturation and light direction from the VRChat menu, and switch lilMCR on or off |
 | **World Shadow** | `World Shadow` | Setup tool for world shadows |
