@@ -4,7 +4,7 @@
 
 **A lilToon-based avatar shader and toolset for VRChat**
 
-![version](https://img.shields.io/badge/version-v1.6.0-ff8fab)
+![version](https://img.shields.io/badge/version-v1.6.1-ff8fab)
 ![lilToon](https://img.shields.io/badge/lilToon-2.x-8ecae6)
 ![platform](https://img.shields.io/badge/VRChat-Avatar-b8a1ff)
 ![UI](https://img.shields.io/badge/UI-English%20%7C%20繁中%20%7C%20日本語%20%7C%20한국어-lightgrey)
@@ -23,6 +23,7 @@ It keeps lilToon's look and settings and adds contact shadows, occlusion and lig
 |---|---|
 | **Contact Shadow** | Tight shadows on the avatar that follow the light direction. The affected area can be limited with a mask |
 | **Occlusion** | Darkens creases and areas where surfaces meet for more depth. Four methods to choose from (SSAO, Soft SSAO, GTAO, Ray March). The affected area can be limited with a mask |
+| **Part Detail** | Adds fine surface detail and a soft highlight to a material: skin (fine lines and pores) or cloth fiber (woven threads). Drawn by lilMCR itself, without changing the material's lilToon settings |
 | **Uzumore** | When the camera goes inside a mesh, vertices are pushed back in front of the camera so you can't see through it |
 | **Local Only** | lilMCR effects are shown only on your own client; other players see regular lilToon |
 | **Adaptive Screen Quality** | Shadow and occlusion quality adjusts to how much of the screen the avatar covers |

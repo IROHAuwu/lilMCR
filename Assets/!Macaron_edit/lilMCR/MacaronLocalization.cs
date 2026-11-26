@@ -284,7 +284,7 @@ namespace liltoon_MCR
             new[] { "方式", "Method", "方式", "방식" },
             new[] { "SSAO（輕量）", "SSAO (light)", "SSAO（軽量）", "SSAO (가벼움)" },
             new[] { "部位細節", "Part Detail", "部位ディテール", "부위 디테일" },
-            new[] { "在皮膚上加上細紋、柔和高光與明暗交界的透光感。全部由 lilMCR 自己繪製，不會更動材質原本的 lilToon 設定。只建議用在身體的皮膚材質。", "Adds fine surface detail, a soft highlight and a translucent glow along the shadow edge to skin. Everything is drawn by lilMCR itself; the material's own lilToon settings are not changed. Recommended for the body's skin materials only.", "肌に細かな凹凸、やわらかいハイライト、明暗の境目の透け感を加えます。すべて lilMCR 自身が描画し、マテリアル本来の lilToon 設定は変更しません。体の肌マテリアルにのみおすすめです。", "피부에 미세한 요철, 부드러운 하이라이트, 명암 경계의 투과감을 더합니다. 모두 lilMCR이 직접 그리며 머티리얼 본래의 lilToon 설정은 바꾸지 않습니다. 몸의 피부 머티리얼에만 권장합니다." },
+            new[] { "在皮膚或布料上加上細紋與柔和高光（皮膚另有明暗交界的透光感）。全部由 lilMCR 自己繪製，不會更動材質原本的 lilToon 設定。用「種類」選擇皮膚或布料纖維，建議只開在需要的材質上。", "Adds fine surface detail and a soft highlight to skin or cloth (skin also gets a translucent glow along the shadow edge). Everything is drawn by lilMCR itself; the material's own lilToon settings are not changed. Pick skin or cloth fiber with Kind; turning it on only for the materials that need it is recommended.", "肌や布に細かな凹凸とやわらかいハイライトを加えます（肌には明暗の境目の透け感も加わります）。すべて lilMCR 自身が描画し、マテリアル本来の lilToon 設定は変更しません。「種類」で肌か布の繊維を選びます。必要なマテリアルだけでオンにすることをおすすめします。", "피부나 천에 미세한 요철과 부드러운 하이라이트를 더합니다(피부에는 명암 경계의 투과감도 더해집니다). 모두 lilMCR이 직접 그리며, 머티리얼 본래의 lilToon 설정은 바꾸지 않습니다. '종류'에서 피부 또는 천 섬유를 고릅니다. 필요한 머티리얼에만 켜는 것을 권장합니다." },
             new[] { "細紋強度", "Detail Strength", "凹凸の強さ", "요철 강도" },
             new[] { "皮膚紋理與毛孔的凹凸感。0 = 沒有細紋。", "Relief of the skin texture and pores. 0 = no detail.", "肌理と毛穴の凹凸感。0 = 凹凸なし。", "피부결과 모공의 요철감. 0 = 요철 없음." },
             new[] { "套用到 lilToon 的反光", "Detail on lilToon", "lilToon の反射にも適用", "lilToon 반사에도 적용" },
@@ -324,7 +324,7 @@ namespace liltoon_MCR
             new[] { "POI風(軟青)", "POI style (soft cyan)", "POI風（ソフトシアン）", "POI풍 (소프트 시안)" },
             new[] { "和「POI風(軟粉)」相同的柔和 SSAO 與細接觸陰影，陰影改為淡青色。顏色會套用到所有材質，要改請調「近處顏色」或把「帶入底色」調回 1。", "The same Soft SSAO and thin contact shadow as POI style (soft pink), with a pale cyan shadow tint. The color is applied to every material; to change it, adjust Near Color or set Albedo Tint back to 1.", "「POI風（ソフトピンク）」と同じソフト SSAO と細い接触影で、影は淡い水色です。色はすべてのマテリアルに適用されます。変更するには「近くの色」を調整するか、「ベースカラーを反映」を 1 に戻してください。", "POI풍 (소프트 핑크)와 같은 소프트 SSAO와 가는 접촉 그림자이며, 그림자는 연한 청록색입니다. 색은 모든 머티리얼에 적용됩니다. 바꾸려면 '가까운 곳 색상'을 조정하거나 '베이스 색 반영'을 1로 되돌리세요." },
             new[] { "POI風(超濃)", "POI style (extra deep)", "POI風（超濃）", "POI풍 (매우 진함)" },
-            new[] { "柔和 SSAO（最高品質，每像素 32 次取樣）範圍中等、顏色為黑色，搭配較長（5 cm）的灰色接觸陰影。整體比「POI風(濃)」柔和、均勻。", "Soft SSAO (best quality, 32 samples per pixel) with a medium radius and a black tint, with a longer (5 cm) gray contact shadow. Softer and more even overall than POI style (deep).", "ソフト SSAO（最高品質、1ピクセルあたり32サンプル）を中くらいの範囲・黒色で、長め（5 cm）の灰色の接触影と組み合わせます。「POI風（濃）」より全体にやわらかく均一です。", "소프트 SSAO (최고 품질, 픽셀당 32 샘플)를 중간 범위·검은색으로, 긴(5 cm) 회색 접촉 그림자와 함께 씁니다. POI풍 (진함)보다 전체적으로 부드럽고 균일합니다." },
+            new[] { "柔和 SSAO（最高品質，每像素 32 次取樣）範圍中等、顏色為黑色，搭配較長（5 cm）的灰色接觸陰影。影子比「POI風(濃)」更長、範圍更大，背光面也會整片變暗。", "Soft SSAO (best quality, 32 samples per pixel) with a medium radius and a black tint, with a longer (5 cm) gray contact shadow. The shadow is longer and covers more than POI style (deep), and the side facing away from the light is shaded as a whole.", "ソフト SSAO（最高品質、1ピクセルあたり32サンプル）を中くらいの範囲・黒色で、長め（5 cm）の灰色の接触影と組み合わせます。「POI風（濃）」より影が長く広くかかり、光の当たらない側も全体的に暗くなります。", "소프트 SSAO (최고 품질, 픽셀당 32 샘플)를 중간 범위·검은색으로, 긴(5 cm) 회색 접촉 그림자와 함께 씁니다. POI풍 (진함)보다 그림자가 더 길고 넓게 드리우며, 빛이 닿지 않는 쪽도 전체적으로 어두워집니다." },
             new[] { "柔和 SSAO（最高品質，每像素 32 次取樣）搭配柔邊的接觸陰影。縫隙的陰影又深又窄，顏色跟著材質本身的顏色。", "Soft SSAO (best quality, 32 samples per pixel) with a soft-edged contact shadow. Crease shading is deep and narrow, in the material's own color.", "ソフト SSAO（最高品質、1ピクセルあたり32サンプル）とやわらかい縁の接触影。すき間の影は濃く細く、マテリアル自身の色になります。", "소프트 SSAO (최고 품질, 픽셀당 32 샘플)와 가장자리가 부드러운 접촉 그림자. 틈의 그림자는 진하고 좁으며 머티리얼 자체의 색을 따릅니다." },
             new[] { "柔和 SSAO（輕量）", "Soft SSAO (light)", "ソフト SSAO（軽量）", "소프트 SSAO (가벼움)" },
             new[] { "0 = 範圍內平均取樣（漸層較寬）、1 = 集中在這一點附近（縫隙較深、外圍較淡）。", "0 = samples spread evenly over the range (wider gradient), 1 = gathered near this point (deeper creases, fainter outer part).", "0 = 範囲内を均等にサンプリング（グラデーションが広い）、1 = この点の近くに集中（すき間が濃く、外側は薄い）。", "0 = 범위 안에서 고르게 샘플링 (그라데이션이 넓음), 1 = 이 점 근처에 집중 (틈이 진하고 바깥쪽은 옅음)." },
@@ -712,7 +712,7 @@ namespace liltoon_MCR
                     foreach(string guid in AssetDatabase.FindAssets("lilLanguageManager t:MonoScript"))
                     {
                         string script = AssetDatabase.GUIDToAssetPath(guid);
-                        string candidate = System.IO.Path.GetDirectoryName(script).Replace('\\', '/') + "/Localization";
+                        string candidate = System.IO.Path.GetDirectoryName(script).Replace('\', '/') + "/Localization";
                         if(AssetDatabase.IsValidFolder(candidate)) { folder = candidate; break; }
                     }
                 }
@@ -772,7 +772,7 @@ namespace liltoon_MCR
             for(int i = 0; i < s.Length; i++)
             {
                 char c = s[i];
-                if(c != '\\' || i + 1 >= s.Length) { sb.Append(c); continue; }
+                if(c != '\' || i + 1 >= s.Length) { sb.Append(c); continue; }
                 char n = s[++i];
                 switch(n)
                 {

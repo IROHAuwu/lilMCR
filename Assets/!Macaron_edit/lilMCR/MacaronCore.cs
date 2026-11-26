@@ -350,7 +350,7 @@ namespace liltoon_MCR
             MacaronSection skin = new MacaronSection
             {
                 Id = "skin", Title = "部位細節", EnableProp = "_MCR_SkinEnable",
-                Help = "在皮膚上加上細紋、柔和高光與明暗交界的透光感。全部由 lilMCR 自己繪製，不會更動材質原本的 lilToon 設定。只建議用在身體的皮膚材質。"
+                Help = "在皮膚或布料上加上細紋與柔和高光（皮膚另有明暗交界的透光感）。全部由 lilMCR 自己繪製，不會更動材質原本的 lilToon 設定。用「種類」選擇皮膚或布料纖維，建議只開在需要的材質上。"
             };
             skin.Props.Add(Popup(PropSkinKind, "種類", new[] { "皮膚", "布料纖維" }, new[] { 0f, 1f },
                 "切換時會換成對應的細紋貼圖，並把下面的數值設成該種類的起始值。布料纖維：平織的經緯線，沒有透光感與微血管，高光較弱、邊緣柔光較強。"));
@@ -849,7 +849,7 @@ namespace liltoon_MCR
             "柔和 SSAO（最高品質，每像素 32 次取樣）搭配柔邊的接觸陰影。縫隙的陰影又深又窄，顏色跟著材質本身的顏色。",
             "柔和 SSAO（最高品質，每像素 32 次取樣）搭配細的接觸陰影，陰影帶粉色。粉色會套用到所有材質，要改請調「近處顏色」或把「帶入底色」調回 1。",
             "和「POI風(軟粉)」相同的柔和 SSAO 與細接觸陰影，陰影改為淡青色。顏色會套用到所有材質，要改請調「近處顏色」或把「帶入底色」調回 1。",
-            "柔和 SSAO（最高品質，每像素 32 次取樣）範圍中等、顏色為黑色，搭配較長（5 cm）的灰色接觸陰影。整體比「POI風(濃)」柔和、均勻。",
+            "柔和 SSAO（最高品質，每像素 32 次取樣）範圍中等、顏色為黑色，搭配較長（5 cm）的灰色接觸陰影。影子比「POI風(濃)」更長、範圍更大，背光面也會整片變暗。",
         };
 
         private static KeyValuePair<string, Vector4> T(string name, float x, float y, float z, float w)
