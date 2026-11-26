@@ -225,7 +225,7 @@ namespace lilToon
                 if(prop.Name == MacaronCore.PropOccMethod || prop.Name == MacaronCore.PropSkinKind)
                 {
                     // Each method keeps its own shared settings (first switch to SSAO: SSAO starting values).
-                    Undo.RecordObjects(p.targets, "Macaron Occlusion Method");
+                    Undo.RecordObjects(p.targets, prop.Name == MacaronCore.PropSkinKind ? "Macaron Part Detail Kind" : "Macaron Occlusion Method");
                     foreach(UnityEngine.Object o in p.targets)
                     {
                         Material m = o as Material;

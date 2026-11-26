@@ -14,7 +14,8 @@
 // Main texture UV (tiling / offset, scroll and rotation), the space the Mask Generator and the capture pass use.
 float2 Macaron_MainUV(float2 uv0)
 {
-#if defined(LIL_FEATURE_ANIMATE_MAIN_UV) || defined(LIL_LITE)
+// FakeShadow has the main texture but no scroll / rotation property.
+#if (defined(LIL_FEATURE_ANIMATE_MAIN_UV) || defined(LIL_LITE)) && !defined(LIL_FAKESHADOW)
     return lilCalcUV(uv0, _MainTex_ST, _MainTex_ScrollRotate);
 #else
     return uv0 * _MainTex_ST.xy + _MainTex_ST.zw;
