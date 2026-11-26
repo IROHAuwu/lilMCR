@@ -287,6 +287,8 @@ namespace liltoon_MCR
             new[] { "在皮膚上加上細紋、柔和高光與明暗交界的透光感。全部由 lilMCR 自己繪製，不會更動材質原本的 lilToon 設定。只建議用在身體的皮膚材質。", "Adds fine surface detail, a soft highlight and a translucent glow along the shadow edge to skin. Everything is drawn by lilMCR itself; the material's own lilToon settings are not changed. Recommended for the body's skin materials only.", "肌に細かな凹凸、やわらかいハイライト、明暗の境目の透け感を加えます。すべて lilMCR 自身が描画し、マテリアル本来の lilToon 設定は変更しません。体の肌マテリアルにのみおすすめです。", "피부에 미세한 요철, 부드러운 하이라이트, 명암 경계의 투과감을 더합니다. 모두 lilMCR이 직접 그리며 머티리얼 본래의 lilToon 설정은 바꾸지 않습니다. 몸의 피부 머티리얼에만 권장합니다." },
             new[] { "細紋強度", "Detail Strength", "凹凸の強さ", "요철 강도" },
             new[] { "皮膚紋理與毛孔的凹凸感。0 = 沒有細紋。", "Relief of the skin texture and pores. 0 = no detail.", "肌理と毛穴の凹凸感。0 = 凹凸なし。", "피부결과 모공의 요철감. 0 = 요철 없음." },
+            new[] { "套用到 lilToon 的反光", "Detail on lilToon", "lilToon の反射にも適用", "lilToon 반사에도 적용" },
+            new[] { "讓 lilToon 本身的反射、MatCap、邊緣光也跟著細紋起伏。0 = 只有膚質自己的高光有細紋。", "lilToon's own reflection, MatCap and rim light follow the detail too. 0 = only the Skin highlight shows the detail.", "lilToon 本来の反射・MatCap・リムライトにも凹凸を反映します。0 = 肌の質感のハイライトだけに凹凸が出ます。", "lilToon 자체의 반사, MatCap, 림 라이트에도 요철을 반영합니다. 0 = 피부 질감의 하이라이트에만 요철이 나타납니다." },
             new[] { "細紋密度", "Detail Tiling", "凹凸の細かさ", "요철 밀도" },
             new[] { "細紋貼圖在 UV 上重複的次數。數值越大紋路越細。", "How many times the detail texture repeats across the UV. Larger = finer detail.", "凹凸テクスチャが UV 上で繰り返される回数。大きいほど細かくなります。", "요철 텍스처가 UV에서 반복되는 횟수. 클수록 결이 고와집니다." },
             new[] { "高光強度", "Highlight", "ハイライトの強さ", "하이라이트 강도" },

@@ -111,7 +111,8 @@
     float4 _MCR_SkinScatterColor; \
     float _MCR_SkinMottle; \
     float4 _MCR_SkinMottleColor; \
-    float _MCR_SkinMaskAmount;
+    float _MCR_SkinMaskAmount; \
+    float _MCR_SkinLilNormal;
 
 // Textures only. Sampled with lilToon's shared sampler (lil_sampler_linear_repeat), so no sampler is added.
 #define LIL_CUSTOM_TEXTURES \
@@ -140,9 +141,9 @@
 
 // Occlusion on Reflections: remembers the color right before reflection / MatCap and right before emission, so the
 // part added in between (reflection, MatCap, rim light, glitter, the Skin highlight) can be occluded separately.
-#define BEFORE_REFLECTION Macaron_MarkSpecStart(fd);
+#define BEFORE_REFLECTION Macaron_SkinBegin(fd); Macaron_MarkSpecStart(fd);
 #define BEFORE_MATCAP Macaron_MarkSpecStart(fd);
-#define BEFORE_EMISSION_1ST Macaron_Skin(fd); Macaron_MarkSpecEnd(fd);
+#define BEFORE_EMISSION_1ST Macaron_SkinEnd(fd); Macaron_MarkSpecEnd(fd);
 
 // Light Adjuster (animated by the Macaron Light Adjuster menu; neutral defaults = no change).
 // BEFORE_SHADOW: right before lilToon's lighting in the normal / lite / fur forward passes (not Gem).

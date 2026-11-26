@@ -1920,14 +1920,18 @@ void Macaron_MarkSpecEnd(inout lilFragData fd)
 
 //------------------------------------------------------------------------------------------------------------------------------
 // Skin: fine surface detail, a soft highlight and a warm glow along the shadow edge, drawn by lilMCR on top of lilToon's
-// result. No lilToon feature or texture slot is used, so the material's own settings are left as they are.
-// Called from BEFORE_EMISSION_1ST (see custom.hlsl): after lilToon's lighting, reflection, MatCap and rim light, and
-// inside the reflection range, so Occlusion on Reflections also removes the highlight inside creases.
+// result. No lilToon texture slot is used and no lilToon setting is changed.
+// Two steps (see custom.hlsl):
+// - Macaron_SkinBegin, at BEFORE_REFLECTION (after lilToon's lighting): reads the detail, applies the surface color
+//   part, and hands the detail normal to lilToon, so lilToon's own reflection, MatCap and rim light follow the skin
+//   lines and pores too (Detail on lilToon).
+// - Macaron_SkinEnd, at BEFORE_EMISSION_1ST: adds the highlight, inside the reflection range, so Occlusion on
+//   Reflections also removes it inside creases; gives lilToon its own normal back for everything after it.
 //
 // _MCR_SkinTex: RG = tangent-space normal (x, y), B = cavity (1 = skin line / pore), A = color variation around 0.5
 // (below: mottling, darker; above: capillaries, redder).
 // It is read twice: once at Tiling for the fine detail and once wider and turned, which hides the repetition of the
-// fine read and carries the mottling.
+// fine read and carries the color variation.
 
 // Wide read: scale and a fixed turn (cos, sin) relative to the fine read.
 #define MCR_SKIN_WIDE_SCALE 0.31
@@ -1940,9 +1944,22 @@ void Macaron_MarkSpecEnd(inout lilFragData fd)
 // Width of the glow along the shadow edge, as a range of N.L around 0.
 #define MCR_SKIN_EDGE_WIDTH 0.38
 
-void Macaron_Skin(inout lilFragData fd)
-{
 #if !defined(LIL_LITE) && !defined(LIL_GEM) && !defined(LIL_FUR) && !defined(LIL_OUTLINE) && !defined(LIL_PASS_FORWARDADD) && !defined(LIL_PASS_SHADOWCASTER) && !defined(LIL_PASS_META) && !defined(LIL_PASS_DEPTHONLY) && !defined(LIL_PASS_DEPTHNORMALS) && !defined(LIL_PASS_MOTIONVECTORS)
+#define MCR_SKIN_COMPILED 1
+#else
+#define MCR_SKIN_COMPILED 0
+#endif
+
+// Handed from Macaron_SkinBegin to Macaron_SkinEnd.
+static bool mcrSkinActive = false;
+static float3 mcrSkinBaseN = 0.0;      // lilToon's normal before the detail
+static float3 mcrSkinDetailN = 0.0;
+static float mcrSkinCavity = 0.0;
+static float mcrSkinMask = 0.0;
+
+void Macaron_SkinBegin(inout lilFragData fd)
+{
+#if MCR_SKIN_COMPILED
     // Uniform per draw (material values, pass): returning here keeps the implicit-gradient texture reads below valid.
     if(!(_MCR_SkinEnable > 0.5 && _MCR_Active > 0.5 && MCR_MenuActive() && Macaron_LocalVisible())) return;
     if(Macaron_IsWorldCapture()) return;
@@ -1957,7 +1974,7 @@ void Macaron_Skin(inout lilFragData fd)
         mask = MCR_MaskFactor(LIL_SAMPLE_2D(_MCR_SkinMask, lil_sampler_linear_repeat, fd.uvMain).r, _MCR_SkinMaskAmount);
     }
 
-    // Surface frame of the main UV from screen derivatives (no vertex tangent needed, mirrored UVs included).
+    // Surface frame of the main UV from screen derivatives (no vertex tangent needed).
     float3 N = fd.N;
     float3 dpx = ddx(fd.positionWS);
     float3 dpy = ddy(fd.positionWS);
@@ -1967,7 +1984,11 @@ void Macaron_Skin(inout lilFragData fd)
     float3 py = cross(N, dpx);
     float3 T = px * dux.x + py * duy.x;
     float3 B = px * dux.y + py * duy.y;
-    float frameScale = rsqrt(max(max(dot(T, T), dot(B, B)), 1e-20));
+    // The frame above comes out as (+U, +V) or (-U, -V) depending on the platform's screen orientation, on mirrored
+    // UVs and on the face side. The triangle's own winding on screen (against the shading normal) tells which, so
+    // a groove of the texture is always a groove on the surface.
+    float frameSign = dot(cross(dpx, dpy), N) < 0.0 ? -1.0 : 1.0;
+    float frameScale = frameSign * rsqrt(max(max(dot(T, T), dot(B, B)), 1e-20));
     T *= frameScale;
     B *= frameScale;
 
@@ -1983,7 +2004,8 @@ void Macaron_Skin(inout lilFragData fd)
     float2 w = wide.xy * 2.0 - 1.0;
     float2 slope = (fine.xy * 2.0 - 1.0) + float2(w.x * MCR_SKIN_WIDE_COS + w.y * MCR_SKIN_WIDE_SIN, w.y * MCR_SKIN_WIDE_COS - w.x * MCR_SKIN_WIDE_SIN) * 0.3;
     float detail = max(_MCR_SkinDetail, 0.0) * mask;
-    float3 Nd = normalize(N + (T * slope.x + B * slope.y) * detail);
+    float3 bend = (T * slope.x + B * slope.y) * detail;
+    float3 Nd = normalize(N + bend);
     float cavity = fine.b * saturate(detail);
     float variation = wide.a * 2.0 - 1.0;
     float mottle = saturate(-variation);
@@ -1993,8 +2015,7 @@ void Macaron_Skin(inout lilFragData fd)
     float3 V = fd.V;
     float nl = dot(N, L);
     float3 light = fd.lightColor;
-    float3 colIn = fd.col.rgb;
-    float3 col = colIn;
+    float3 col = fd.col.rgb;
 
     // 1. Surface color: mottling, capillaries, darker skin lines, and the relief of the detail normal against the light.
     float variationAmount = saturate(_MCR_SkinMottle) * mask;
@@ -2010,11 +2031,48 @@ void Macaron_Skin(inout lilFragData fd)
     float band = exp(-(edge * edge) / (MCR_SKIN_EDGE_WIDTH * MCR_SKIN_EDGE_WIDTH));
     float through = pow(saturate(dot(V, -L)), 3.0) * pow(1.0 - saturate(dot(N, V)), 2.0);
     col += fd.albedo * _MCR_SkinScatterColor.rgb * light * (band * 0.35 + through * 0.6) * scatter;
+    fd.col.rgb = col;
 
-    // Reflection range: what was changed so far is surface color, not reflected light.
-    if(mcrSpecState == 1) mcrSpecStart += col - colIn;
+    mcrSkinActive = true;
+    mcrSkinBaseN = N;
+    mcrSkinDetailN = Nd;
+    mcrSkinCavity = cavity;
+    mcrSkinMask = mask;
 
-    // 3. Highlight: one GGX lobe on the detail normal, rougher inside the grooves, plus a soft sheen at grazing angles.
+    // 3. Detail on lilToon: the normals lilToon uses from here on (reflection, MatCap, rim light) get the same bend.
+    float onLil = saturate(_MCR_SkinLilNormal);
+    if(onLil > 0.0)
+    {
+        float3 lilBend = bend * onLil;
+        fd.N = normalize(N + lilBend);
+        fd.reflectionN = normalize(fd.reflectionN + lilBend);
+        fd.matcapN = normalize(fd.matcapN + lilBend);
+        fd.matcap2ndN = normalize(fd.matcap2ndN + lilBend);
+        fd.nv = saturate(dot(fd.N, V));
+        fd.nvabs = abs(dot(fd.N, V));
+        fd.uvRim = float2(fd.nvabs, fd.nvabs);
+    }
+#endif
+}
+
+void Macaron_SkinEnd(inout lilFragData fd)
+{
+#if MCR_SKIN_COMPILED
+    [branch]
+    if(!mcrSkinActive) return;
+    // lilToon's own normal back: what follows (emission, lilMCR's occlusion and contact shadow) uses the smooth surface.
+    float3 N = mcrSkinBaseN;
+    float3 V = fd.V;
+    fd.N = N;
+    fd.nv = saturate(dot(N, V));
+    fd.nvabs = abs(dot(N, V));
+    fd.uvRim = float2(fd.nvabs, fd.nvabs);
+
+    // Highlight: one GGX lobe on the detail normal, rougher inside the skin lines, plus a soft sheen at grazing angles.
+    float3 Nd = mcrSkinDetailN;
+    float cavity = mcrSkinCavity;
+    float3 L = fd.L;
+    float3 light = fd.lightColor;
     float3 H = normalize(L + V);
     float nh = saturate(dot(Nd, H));
     float lh = saturate(dot(L, H));
@@ -2029,10 +2087,8 @@ void Macaron_Skin(inout lilFragData fd)
     float lit = lerp(0.15, 1.0, saturate(fd.shadowmix));
     float3 highlight = light * (min(lobe, 16.0) * MCR_SKIN_F0 * nlD * lit * max(_MCR_SkinSpecular, 0.0));
     float fresnel = pow(1.0 - nvD, 4.0);
-    highlight += light * (fresnel * saturate(_MCR_SkinSheen) * 0.2 * lerp(0.4, 1.0, saturate(nl * 0.5 + 0.5)));
-    col += highlight * (1.0 - cavity * 0.5) * mask;
-
-    fd.col.rgb = col;
+    highlight += light * (fresnel * saturate(_MCR_SkinSheen) * 0.2 * lerp(0.4, 1.0, saturate(dot(N, L) * 0.5 + 0.5)));
+    fd.col.rgb += highlight * (1.0 - cavity * 0.5) * mcrSkinMask;
 #endif
 }
 

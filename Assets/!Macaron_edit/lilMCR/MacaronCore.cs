@@ -353,6 +353,7 @@ namespace liltoon_MCR
                 Help = "在皮膚上加上細紋、柔和高光與明暗交界的透光感。全部由 lilMCR 自己繪製，不會更動材質原本的 lilToon 設定。只建議用在身體的皮膚材質。"
             };
             skin.Props.Add(P("_MCR_SkinDetail", "細紋強度", MacaronPropKind.Slider, "皮膚紋理與毛孔的凹凸感。0 = 沒有細紋。"));
+            skin.Props.Add(P("_MCR_SkinLilNormal", "套用到 lilToon 的反光", MacaronPropKind.Slider, "讓 lilToon 本身的反射、MatCap、邊緣光也跟著細紋起伏。0 = 只有膚質自己的高光有細紋。"));
             skin.Props.Add(P("_MCR_SkinTiling", "細紋密度", MacaronPropKind.Slider, "細紋貼圖在 UV 上重複的次數。數值越大紋路越細。"));
             skin.Props.Add(P("_MCR_SkinSpecular", "高光強度", MacaronPropKind.Slider));
             skin.Props.Add(P("_MCR_SkinSmoothness", "光滑度", MacaronPropKind.Slider, "數值越大高光越小越亮（像出汗或上油），越小越霧面。"));
