@@ -85,6 +85,20 @@
         [ToggleUI] _MCR_UzuSelf ("Uzumore In Own View", Float) = 0
         [NoScaleOffset] _MCR_UzuMask ("Uzumore Mask", 2D) = "white" {}
         _MCR_UzuMaskAmount ("Uzumore Mask Amount", Range(0, 1)) = 1
+        // Skin (custom_insert.hlsl, Macaron_Skin): fine detail, highlight and scattering drawn by lilMCR itself.
+        [ToggleUI] _MCR_SkinEnable ("Skin", Float) = 0
+        [NoScaleOffset] _MCR_SkinTex ("Skin Detail (RG normal, B cavity, A mottling)", 2D) = "gray" {}
+        _MCR_SkinTiling ("Skin Detail Tiling", Range(1, 80)) = 30
+        _MCR_SkinDetail ("Skin Detail Strength", Range(0, 2)) = 1
+        _MCR_SkinSpecular ("Skin Highlight", Range(0, 4)) = 1.5
+        _MCR_SkinSmoothness ("Skin Smoothness", Range(0, 1)) = 0.5
+        _MCR_SkinSheen ("Skin Sheen", Range(0, 1)) = 0.3
+        _MCR_SkinScatter ("Skin Scattering", Range(0, 1)) = 0.5
+        _MCR_SkinScatterColor ("Skin Scattering Color", Color) = (1,0.24,0.17,1)
+        _MCR_SkinMottle ("Skin Mottling", Range(0, 1)) = 0.35
+        _MCR_SkinMottleColor ("Skin Mottling Color", Color) = (0.8,0.52,0.48,1)
+        [NoScaleOffset] _MCR_SkinMask ("Skin Mask", 2D) = "white" {}
+        _MCR_SkinMaskAmount ("Skin Mask Amount", Range(0, 1)) = 1
         // 1 only on the wearer's own client (IsLocal layer of the Macaron Light Adjuster, MacaronUzumore.cs).
         // Used by Uzumore ("In Own View") and Local Only. Keep the default 0.
         [HideInInspector] _MCR_UzuIsLocal ("Is Local (animated)", Float) = 0

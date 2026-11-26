@@ -1919,6 +1919,117 @@ void Macaron_MarkSpecEnd(inout lilFragData fd)
 }
 
 //------------------------------------------------------------------------------------------------------------------------------
+// Skin: fine surface detail, a soft highlight and a warm glow along the shadow edge, drawn by lilMCR on top of lilToon's
+// result. No lilToon feature or texture slot is used, so the material's own settings are left as they are.
+// Called from BEFORE_EMISSION_1ST (see custom.hlsl): after lilToon's lighting, reflection, MatCap and rim light, and
+// inside the reflection range, so Occlusion on Reflections also removes the highlight inside creases.
+//
+// _MCR_SkinTex: RG = tangent-space normal (x, y), B = cavity (1 = groove / pore), A = mottling (blotches, small spots).
+// It is read twice: once at Tiling for the fine detail and once wider and turned, which hides the repetition of the
+// fine read and carries the mottling.
+
+// Wide read: scale and a fixed turn (cos, sin) relative to the fine read.
+#define MCR_SKIN_WIDE_SCALE 0.31
+#define MCR_SKIN_WIDE_COS 0.8
+#define MCR_SKIN_WIDE_SIN 0.6
+// Reflectance of skin at normal incidence.
+#define MCR_SKIN_F0 0.028
+// Width of the glow along the shadow edge, as a range of N.L around 0.
+#define MCR_SKIN_EDGE_WIDTH 0.38
+
+void Macaron_Skin(inout lilFragData fd)
+{
+#if !defined(LIL_LITE) && !defined(LIL_GEM) && !defined(LIL_FUR) && !defined(LIL_OUTLINE) && !defined(LIL_PASS_FORWARDADD) && !defined(LIL_PASS_SHADOWCASTER) && !defined(LIL_PASS_META) && !defined(LIL_PASS_DEPTHONLY) && !defined(LIL_PASS_DEPTHNORMALS) && !defined(LIL_PASS_MOTIONVECTORS)
+    // Uniform per draw (material values, pass): returning here keeps the implicit-gradient texture reads below valid.
+    if(!(_MCR_SkinEnable > 0.5 && _MCR_Active > 0.5 && MCR_MenuActive() && Macaron_LocalVisible())) return;
+    if(Macaron_IsWorldCapture()) return;
+
+    float2 uvFine = fd.uvMain * max(_MCR_SkinTiling, 1.0);
+    float2 uvWide = float2(uvFine.x * MCR_SKIN_WIDE_COS - uvFine.y * MCR_SKIN_WIDE_SIN, uvFine.x * MCR_SKIN_WIDE_SIN + uvFine.y * MCR_SKIN_WIDE_COS) * MCR_SKIN_WIDE_SCALE + 0.37;
+    float4 fine = LIL_SAMPLE_2D(_MCR_SkinTex, lil_sampler_linear_repeat, uvFine);
+    float4 wide = LIL_SAMPLE_2D(_MCR_SkinTex, lil_sampler_linear_repeat, uvWide);
+    float mask = 1.0;
+    if(_MCR_SkinMaskAmount > 0.0)
+    {
+        mask = MCR_MaskFactor(LIL_SAMPLE_2D(_MCR_SkinMask, lil_sampler_linear_repeat, fd.uvMain).r, _MCR_SkinMaskAmount);
+    }
+
+    // Surface frame of the main UV from screen derivatives (no vertex tangent needed, mirrored UVs included).
+    float3 N = fd.N;
+    float3 dpx = ddx(fd.positionWS);
+    float3 dpy = ddy(fd.positionWS);
+    float2 dux = ddx(fd.uvMain);
+    float2 duy = ddy(fd.uvMain);
+    float3 px = cross(dpy, N);
+    float3 py = cross(N, dpx);
+    float3 T = px * dux.x + py * duy.x;
+    float3 B = px * dux.y + py * duy.y;
+    float frameScale = rsqrt(max(max(dot(T, T), dot(B, B)), 1e-20));
+    T *= frameScale;
+    B *= frameScale;
+
+    #if defined(LIL_RENDER) && LIL_RENDER == 2
+        mask *= saturate(fd.col.a);
+    #endif
+    // Fades with the rest of lilMCR (Fade Distance, total Amount).
+    mask *= MCR_FadeOut(fd.positionCS.w) * saturate(_MCR_Amount);
+    [branch]
+    if(mask <= 0.0) return;
+
+    // Detail normal: the fine read plus a part of the wide one (turned back into the fine read's frame).
+    float2 w = wide.xy * 2.0 - 1.0;
+    float2 slope = (fine.xy * 2.0 - 1.0) + float2(w.x * MCR_SKIN_WIDE_COS + w.y * MCR_SKIN_WIDE_SIN, w.y * MCR_SKIN_WIDE_COS - w.x * MCR_SKIN_WIDE_SIN) * 0.3;
+    float detail = max(_MCR_SkinDetail, 0.0) * mask;
+    float3 Nd = normalize(N + (T * slope.x + B * slope.y) * detail);
+    float cavity = fine.b * saturate(detail);
+    float mottle = wide.a;
+
+    float3 L = fd.L;
+    float3 V = fd.V;
+    float nl = dot(N, L);
+    float3 light = fd.lightColor;
+    float3 colIn = fd.col.rgb;
+    float3 col = colIn;
+
+    // 1. Surface color: mottling, darker grooves, and the relief of the detail normal against the light.
+    col *= lerp(1.0.xxx, _MCR_SkinMottleColor.rgb, saturate(mottle * _MCR_SkinMottle * _MCR_SkinMottleColor.a) * mask);
+    col *= 1.0 - cavity * 0.10;
+    col *= clamp(1.0 + (dot(Nd, L) - nl) * 0.9, 0.6, 1.4);
+
+    // 2. Light passing through the skin: a warm band along the shadow edge, and a glow on thin edges seen against
+    //    the light. Both use the base color, so they stay inside the material's own palette.
+    float scatter = saturate(_MCR_SkinScatter) * saturate(_MCR_SkinScatterColor.a) * mask;
+    float edge = nl + 0.08;
+    float band = exp(-(edge * edge) / (MCR_SKIN_EDGE_WIDTH * MCR_SKIN_EDGE_WIDTH));
+    float through = pow(saturate(dot(V, -L)), 3.0) * pow(1.0 - saturate(dot(N, V)), 2.0);
+    col += fd.albedo * _MCR_SkinScatterColor.rgb * light * (band * 0.35 + through * 0.6) * scatter;
+
+    // Reflection range: what was changed so far is surface color, not reflected light.
+    if(mcrSpecState == 1) mcrSpecStart += col - colIn;
+
+    // 3. Highlight: one GGX lobe on the detail normal, rougher inside the grooves, plus a soft sheen at grazing angles.
+    float3 H = normalize(L + V);
+    float nh = saturate(dot(Nd, H));
+    float lh = saturate(dot(L, H));
+    float nlD = saturate(dot(Nd, L));
+    float nvD = saturate(dot(Nd, V));
+    float rough = saturate(lerp(0.8, 0.42, saturate(_MCR_SkinSmoothness)) + cavity * 0.3);
+    float a = rough * rough;
+    float a2 = a * a;
+    float d = nh * nh * (a2 - 1.0) + 1.0;
+    float lobe = a2 / (d * d * max(lh * lh, 0.1) * (a * 4.0 + 2.0));
+    // In lilToon's shadow the main light does not reach the surface (shadowmix: 1 lit, 0 shadow).
+    float lit = lerp(0.15, 1.0, saturate(fd.shadowmix));
+    float3 highlight = light * (min(lobe, 16.0) * MCR_SKIN_F0 * nlD * lit * max(_MCR_SkinSpecular, 0.0));
+    float fresnel = pow(1.0 - nvD, 4.0);
+    highlight += light * (fresnel * saturate(_MCR_SkinSheen) * 0.2 * lerp(0.4, 1.0, saturate(nl * 0.5 + 0.5)));
+    col += highlight * (1.0 - cavity * 0.5) * mask;
+
+    fd.col.rgb = col;
+#endif
+}
+
+//------------------------------------------------------------------------------------------------------------------------------
 // Entry point (called from BEFORE_FOG, see custom.hlsl)
 
 void Macaron_Apply(inout lilFragData fd)

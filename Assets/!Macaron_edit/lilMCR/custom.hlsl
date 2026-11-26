@@ -100,7 +100,18 @@
     float _MCR_UzuSelf; \
     float _MCR_UzuMaskAmount; \
     float _MCR_UzuIsLocal; \
-    float _MCR_LocalOnly;
+    float _MCR_LocalOnly; \
+    float _MCR_SkinEnable; \
+    float _MCR_SkinTiling; \
+    float _MCR_SkinDetail; \
+    float _MCR_SkinSpecular; \
+    float _MCR_SkinSmoothness; \
+    float _MCR_SkinSheen; \
+    float _MCR_SkinScatter; \
+    float4 _MCR_SkinScatterColor; \
+    float _MCR_SkinMottle; \
+    float4 _MCR_SkinMottleColor; \
+    float _MCR_SkinMaskAmount;
 
 // Textures only. Sampled with lilToon's shared sampler (lil_sampler_linear_repeat), so no sampler is added.
 #define LIL_CUSTOM_TEXTURES \
@@ -108,7 +119,9 @@
     TEXTURE2D(_MCR_GlobalMask); \
     TEXTURE2D(_MCR_OccMask); \
     TEXTURE2D(_MCR_ShadowMask); \
-    TEXTURE2D(_MCR_UzuMask);
+    TEXTURE2D(_MCR_UzuMask); \
+    TEXTURE2D(_MCR_SkinTex); \
+    TEXTURE2D(_MCR_SkinMask);
 
 // Uzumore (vertex stage of the color passes): main UV for its mask and the object-space normal for the facing test.
 #define LIL_REQUIRE_APP_POSITION
@@ -126,10 +139,10 @@
 #define BEFORE_FOG Macaron_UzumoreFS(fd); Macaron_Apply(fd);
 
 // Occlusion on Reflections: remembers the color right before reflection / MatCap and right before emission, so the
-// part added in between (reflection, MatCap, rim light, glitter) can be occluded separately.
+// part added in between (reflection, MatCap, rim light, glitter, the Skin highlight) can be occluded separately.
 #define BEFORE_REFLECTION Macaron_MarkSpecStart(fd);
 #define BEFORE_MATCAP Macaron_MarkSpecStart(fd);
-#define BEFORE_EMISSION_1ST Macaron_MarkSpecEnd(fd);
+#define BEFORE_EMISSION_1ST Macaron_Skin(fd); Macaron_MarkSpecEnd(fd);
 
 // Light Adjuster (animated by the Macaron Light Adjuster menu; neutral defaults = no change).
 // BEFORE_SHADOW: right before lilToon's lighting in the normal / lite / fur forward passes (not Gem).

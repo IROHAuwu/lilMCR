@@ -583,6 +583,13 @@ namespace liltoon_MCR
                 Debug.Log("[Macaron] " + avatar.name + "\n" + MacaronUzumore.Setup(avatar));
             }
 
+            // Skin turned on: materials with an empty detail texture slot get the one shipped with lilMCR.
+            if(prop.Name == "_MCR_SkinEnable" && work.GetFloat(prop.Name) > 0.5f)
+            {
+                foreach(Material m in mats) { if(MacaronCore.EnsureSkinTexture(m)) EditorUtility.SetDirty(m); }
+                LoadFromFirstTarget();
+            }
+
             // Direction changed on an avatar: refresh its axis too.
             if(source == Source.Avatar && avatar != null && IsDirectionProp(prop.Name))
             {

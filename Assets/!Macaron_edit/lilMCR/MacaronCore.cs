@@ -344,6 +344,32 @@ namespace liltoon_MCR
             uzu.Props.Add(uzuMaskAmount);
             list.Add(uzu);
 
+            //--------------------------------------------------------------------------------------
+            // Skin (custom_insert.hlsl, Macaron_Skin). Off by default and not part of any quality tier: it is meant for
+            // the skin materials only. Turning it on fills an empty detail texture slot (EnsureSkinTexture).
+            MacaronSection skin = new MacaronSection
+            {
+                Id = "skin", Title = "膚質", EnableProp = "_MCR_SkinEnable",
+                Help = "在皮膚上加上細紋、柔和高光與明暗交界的透光感。全部由 lilMCR 自己繪製，不會更動材質原本的 lilToon 設定。只建議用在身體的皮膚材質。"
+            };
+            skin.Props.Add(P("_MCR_SkinDetail", "細紋強度", MacaronPropKind.Slider, "皮膚紋理與毛孔的凹凸感。0 = 沒有細紋。"));
+            skin.Props.Add(P("_MCR_SkinTiling", "細紋密度", MacaronPropKind.Slider, "細紋貼圖在 UV 上重複的次數。數值越大紋路越細。"));
+            skin.Props.Add(P("_MCR_SkinSpecular", "高光強度", MacaronPropKind.Slider));
+            skin.Props.Add(P("_MCR_SkinSmoothness", "光滑度", MacaronPropKind.Slider, "數值越大高光越小越亮（像出汗或上油），越小越霧面。"));
+            skin.Props.Add(P("_MCR_SkinSheen", "邊緣柔光", MacaronPropKind.Slider, "斜看皮膚時邊緣的一層淡淡反光。"));
+            skin.Props.Add(P("_MCR_SkinScatter", "透光感", MacaronPropKind.Slider, "明暗交界處的暖色，以及逆光時邊緣的透光。"));
+            skin.Props.Add(Adv(P("_MCR_SkinScatterColor", "透光顏色", MacaronPropKind.Color)));
+            skin.Props.Add(P("_MCR_SkinMottle", "膚色斑駁", MacaronPropKind.Slider, "讓膚色有自然的深淺不均與小斑點。"));
+            skin.Props.Add(Adv(P("_MCR_SkinMottleColor", "斑駁顏色", MacaronPropKind.Color)));
+            skin.Props.Add(Adv(P("_MCR_SkinTex", "細紋貼圖", MacaronPropKind.Texture, "RG = 法線、B = 凹陷、A = 斑駁。留空時開啟會自動填入內附的貼圖。")));
+            MacaronProp skinMask = Adv(P("_MCR_SkinMask", "膚質遮罩", MacaronPropKind.Texture, "白 = 有膚質效果、黑 = 排除（R 通道）。可用遮罩生成器製作。"));
+            skinMask.TextureExtra = "_MCR_SkinMaskAmount";
+            skin.Props.Add(skinMask);
+            MacaronProp skinMaskAmount = Adv(P("_MCR_SkinMaskAmount", "膚質遮罩強度", MacaronPropKind.Slider));
+            skinMaskAmount.InlineExtra = true;
+            skin.Props.Add(skinMaskAmount);
+            list.Add(skin);
+
             return list;
         }
 
@@ -567,6 +593,21 @@ namespace liltoon_MCR
             result = false;
 #endif
             return result;
+        }
+
+        // Skin: the detail texture shipped with lilMCR (Textures/MCR_SkinDetail.png).
+        public const string SkinTexGuid = "c3a1f0d2b7e44c6f9a58d1e2037b64aa";
+
+        /// <summary>Skin turned on with an empty detail texture slot: fills in the texture shipped with lilMCR.
+        /// Returns true when the material was changed (the caller records Undo / marks dirty).</summary>
+        public static bool EnsureSkinTexture(Material m)
+        {
+            if(m == null || !m.HasProperty("_MCR_SkinTex") || !m.HasProperty("_MCR_SkinEnable")) return false;
+            if(m.GetFloat("_MCR_SkinEnable") <= 0.5f || m.GetTexture("_MCR_SkinTex") != null) return false;
+            Texture tex = AssetDatabase.LoadAssetAtPath<Texture>(AssetDatabase.GUIDToAssetPath(SkinTexGuid));
+            if(tex == null) return false;
+            m.SetTexture("_MCR_SkinTex", tex);
+            return true;
         }
 
         /// <summary>Enables the capture pass only for materials that take part in a world shadow capture.

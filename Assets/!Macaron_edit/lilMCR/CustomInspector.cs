@@ -47,6 +47,7 @@ namespace lilToon
             activeMaterial = material;
             // Derived state (capture key -> capture pass), also fixes materials made before this setting existed.
             if(MacaronCore.SyncCapturePass(material)) EditorUtility.SetDirty(material);
+            if(MacaronCore.EnsureSkinTexture(material)) EditorUtility.SetDirty(material);
 
             if(!SectionFoldout("main", "Macaron", true, true)) return;
 
