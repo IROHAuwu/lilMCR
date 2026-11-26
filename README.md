@@ -4,7 +4,7 @@
 
 **A lilToon-based avatar shader and toolset for VRChat**
 
-![version](https://img.shields.io/badge/version-v1.6.1-ff8fab)
+![version](https://img.shields.io/badge/version-v1.6.2-ff8fab)
 ![lilToon](https://img.shields.io/badge/lilToon-2.x-8ecae6)
 ![platform](https://img.shields.io/badge/VRChat-Avatar-b8a1ff)
 ![UI](https://img.shields.io/badge/UI-English%20%7C%20繁中%20%7C%20日本語%20%7C%20한국어-lightgrey)

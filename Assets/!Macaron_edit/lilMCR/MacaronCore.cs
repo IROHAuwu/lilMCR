@@ -352,8 +352,8 @@ namespace liltoon_MCR
                 Id = "skin", Title = "部位細節", EnableProp = "_MCR_SkinEnable",
                 Help = "在皮膚或布料上加上細紋與柔和高光（皮膚另有明暗交界的透光感）。全部由 lilMCR 自己繪製，不會更動材質原本的 lilToon 設定。用「種類」選擇皮膚或布料纖維，建議只開在需要的材質上。"
             };
-            skin.Props.Add(Popup(PropSkinKind, "種類", new[] { "皮膚", "布料纖維" }, new[] { 0f, 1f },
-                "切換時會換成對應的細紋貼圖，並把下面的數值設成該種類的起始值。布料纖維：平織的經緯線，沒有透光感與微血管，高光較弱、邊緣柔光較強。"));
+            skin.Props.Add(Popup(PropSkinKind, "種類", new[] { "皮膚", "布料纖維", "自備法線貼圖" }, new[] { 0f, 1f, 2f },
+                "切換時會換成對應的細紋貼圖，並把下面的數值設成該種類的起始值。布料纖維：平織的經緯線，沒有透光感與微血管，高光較弱、邊緣柔光較強。自備法線貼圖：把自己的法線貼圖放進「細紋貼圖」時使用，只取凹凸；放入後會自動切到這一項。"));
             skin.Props.Add(P("_MCR_SkinDetail", "細紋強度", MacaronPropKind.Slider, "皮膚紋理與毛孔的凹凸感。0 = 沒有細紋。"));
             skin.Props.Add(P("_MCR_SkinLilNormal", "套用到 lilToon 的反光", MacaronPropKind.Slider, "讓 lilToon 本身的反射、MatCap、邊緣光也跟著細紋起伏。0 = 只有部位細節自己的高光有細紋。"));
             skin.Props.Add(Adv(P("_MCR_SkinWide", "大範圍起伏", MacaronPropKind.Slider, "把同一張貼圖放大、轉個角度再疊一層，讓細紋不會看起來太規律。這一層固定跟著 UV，不受「均勻密度」控制，所以預設是 0。")));
@@ -608,6 +608,20 @@ namespace liltoon_MCR
         public const string ClothTexGuid = "d4b2e1c3a8f55d70ab69e2f3148c75bb";
         public const string PropSkinKind = "_MCR_SkinKind";
 
+        private static bool IsBundledSkinTexture(Texture t)
+        {
+            if(t == null) return false;
+            string guid = AssetDatabase.AssetPathToGUID(AssetDatabase.GetAssetPath(t));
+            return guid == SkinTexGuid || guid == ClothTexGuid;
+        }
+
+        private static bool IsNormalMapAsset(Texture t)
+        {
+            if(t == null) return false;
+            TextureImporter importer = AssetImporter.GetAtPath(AssetDatabase.GetAssetPath(t)) as TextureImporter;
+            return importer != null && importer.textureType == TextureImporterType.NormalMap;
+        }
+
         private static string SkinKindTexGuid(Material m)
         {
             return m.HasProperty(PropSkinKind) && m.GetFloat(PropSkinKind) > 0.5f ? ClothTexGuid : SkinTexGuid;
@@ -632,6 +646,14 @@ namespace liltoon_MCR
         public static void SwitchSkinKind(Material m, float kind)
         {
             if(m == null || !m.HasProperty(PropSkinKind)) return;
+            if(kind > 1.5f)
+            {
+                // A normal map of the user's own: the values stay, only the bundled texture leaves the slot (it is not
+                // in the normal map layout).
+                m.SetFloat(PropSkinKind, 2f);
+                if(m.HasProperty("_MCR_SkinTex") && IsBundledSkinTexture(m.GetTexture("_MCR_SkinTex"))) m.SetTexture("_MCR_SkinTex", null);
+                return;
+            }
             bool cloth = kind > 0.5f;
             m.SetFloat(PropSkinKind, cloth ? 1f : 0f);
             foreach(object[] row in SkinKindFloats)
@@ -642,8 +664,9 @@ namespace liltoon_MCR
             if(m.HasProperty("_MCR_SkinMottleColor"))
                 m.SetColor("_MCR_SkinMottleColor", cloth ? new Color(0.55f, 0.55f, 0.55f, 1f) : new Color(0.8f, 0.52f, 0.48f, 1f));
             if(!m.HasProperty("_MCR_SkinTex")) return;
-            string current = AssetDatabase.AssetPathToGUID(AssetDatabase.GetAssetPath(m.GetTexture("_MCR_SkinTex")));
-            if(m.GetTexture("_MCR_SkinTex") != null && current != SkinTexGuid && current != ClothTexGuid) return;
+            // A detail texture of the user's own (lilMCR layout) stays; a normal map cannot be used by these kinds.
+            Texture held = m.GetTexture("_MCR_SkinTex");
+            if(held != null && !IsBundledSkinTexture(held) && !IsNormalMapAsset(held)) return;
             Texture tex = AssetDatabase.LoadAssetAtPath<Texture>(AssetDatabase.GUIDToAssetPath(cloth ? ClothTexGuid : SkinTexGuid));
             if(tex != null) m.SetTexture("_MCR_SkinTex", tex);
         }
@@ -661,7 +684,26 @@ namespace liltoon_MCR
         public static bool EnsureSkinTexture(Material m)
         {
             if(m == null || !m.HasProperty("_MCR_SkinTex") || !m.HasProperty("_MCR_SkinEnable")) return false;
-            if(m.GetFloat("_MCR_SkinEnable") <= 0.5f || m.GetTexture("_MCR_SkinTex") != null) return false;
+            Texture held = m.GetTexture("_MCR_SkinTex");
+            if(held != null)
+            {
+                // The kind follows the texture: a texture imported as a normal map is read as one (kind 2), and the
+                // bundled textures never are. Read in the wrong layout, part of a normal map ended up in the color
+                // variation, which follows the UV whatever Even Density says (two patterns at once).
+                if(!m.HasProperty(PropSkinKind)) return false;
+                bool asNormalMap = m.GetFloat(PropSkinKind) > 1.5f;
+                if(IsBundledSkinTexture(held))
+                {
+                    if(!asNormalMap) return false;
+                    m.SetFloat(PropSkinKind, AssetDatabase.AssetPathToGUID(AssetDatabase.GetAssetPath(held)) == ClothTexGuid ? 1f : 0f);
+                    return true;
+                }
+                if(asNormalMap || !IsNormalMapAsset(held)) return false;
+                m.SetFloat(PropSkinKind, 2f);
+                return true;
+            }
+            if(m.GetFloat("_MCR_SkinEnable") <= 0.5f) return false;
+            if(m.HasProperty(PropSkinKind) && m.GetFloat(PropSkinKind) > 1.5f) return false;    // waits for the user's normal map
             Texture tex = AssetDatabase.LoadAssetAtPath<Texture>(AssetDatabase.GUIDToAssetPath(SkinKindTexGuid(m)));
             if(tex == null) return false;
             m.SetTexture("_MCR_SkinTex", tex);

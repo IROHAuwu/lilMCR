@@ -1984,6 +1984,15 @@ static float3 mcrSkinDetailN = 0.0;
 static float mcrSkinCavity = 0.0;
 static float mcrSkinMask = 0.0;
 
+// One read of the detail texture in the layout the rest works with: xy = normal xy (0..1), z = cavity, w = color
+// variation (0.5 = none). Kind 2 = a normal map of the user's own as Unity imports it (x in A for DXT5nm, in R
+// otherwise, so R * A covers both): only the normal is taken, a normal map has no cavity or color variation.
+float4 Macaron_SkinTexel(float4 t)
+{
+    if(_MCR_SkinKind > 1.5) return float4(t.r * t.a, t.g, 0.0, 0.5);
+    return t;
+}
+
 void Macaron_SkinBegin(inout lilFragData fd)
 {
 #if MCR_SKIN_COMPILED
@@ -1994,7 +2003,7 @@ void Macaron_SkinBegin(inout lilFragData fd)
     float tiling = max(_MCR_SkinTiling, 1.0);
     float2 uvFine = fd.uvMain * tiling;
     float2 uvWide = float2(uvFine.x * MCR_SKIN_WIDE_COS - uvFine.y * MCR_SKIN_WIDE_SIN, uvFine.x * MCR_SKIN_WIDE_SIN + uvFine.y * MCR_SKIN_WIDE_COS) * MCR_SKIN_WIDE_SCALE + 0.37;
-    float4 wide = LIL_SAMPLE_2D(_MCR_SkinTex, lil_sampler_linear_repeat, uvWide);
+    float4 wide = Macaron_SkinTexel(LIL_SAMPLE_2D(_MCR_SkinTex, lil_sampler_linear_repeat, uvWide));
     float mask = 1.0;
     if(_MCR_SkinMaskAmount > 0.0)
     {
@@ -2045,13 +2054,13 @@ void Macaron_SkinBegin(inout lilFragData fd)
             float2 pick = float2(i & 1, i >> 1);
             float2 scale = scaleLow * (1.0 + pick);
             float2 wgt2 = lerp(1.0 - f, f, pick);
-            float4 t = LIL_SAMPLE_2D_GRAD(_MCR_SkinTex, lil_sampler_linear_repeat, fd.uvMain * scale, dux * scale, duy * scale);
+            float4 t = Macaron_SkinTexel(LIL_SAMPLE_2D_GRAD(_MCR_SkinTex, lil_sampler_linear_repeat, fd.uvMain * scale, dux * scale, duy * scale));
             fine += float3((t.xy * 2.0 - 1.0) * slopeLow * (1.0 + pick), t.b) * (wgt2.x * wgt2.y);
         }
     }
     else
     {
-        float4 t = LIL_SAMPLE_2D_GRAD(_MCR_SkinTex, lil_sampler_linear_repeat, uvFine, dux * tiling, duy * tiling);
+        float4 t = Macaron_SkinTexel(LIL_SAMPLE_2D_GRAD(_MCR_SkinTex, lil_sampler_linear_repeat, uvFine, dux * tiling, duy * tiling));
         fine = float3(t.xy * 2.0 - 1.0, t.b);
     }
 

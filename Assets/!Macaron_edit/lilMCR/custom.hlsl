@@ -115,6 +115,7 @@
     float _MCR_SkinLilNormal; \
     float _MCR_SkinEven; \
     float _MCR_SkinWide; \
+    float _MCR_SkinKind; \
     float _MCR_SkinSize;
 
 // Textures only. Sampled with lilToon's shared sampler (lil_sampler_linear_repeat), so no sampler is added.
