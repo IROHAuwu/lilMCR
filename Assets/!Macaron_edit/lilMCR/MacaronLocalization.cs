@@ -712,7 +712,7 @@ namespace liltoon_MCR
                     foreach(string guid in AssetDatabase.FindAssets("lilLanguageManager t:MonoScript"))
                     {
                         string script = AssetDatabase.GUIDToAssetPath(guid);
-                        string candidate = System.IO.Path.GetDirectoryName(script).Replace('\', '/') + "/Localization";
+                        string candidate = System.IO.Path.GetDirectoryName(script).Replace('\\', '/') + "/Localization";
                         if(AssetDatabase.IsValidFolder(candidate)) { folder = candidate; break; }
                     }
                 }
@@ -772,7 +772,7 @@ namespace liltoon_MCR
             for(int i = 0; i < s.Length; i++)
             {
                 char c = s[i];
-                if(c != '\' || i + 1 >= s.Length) { sb.Append(c); continue; }
+                if(c != '\\' || i + 1 >= s.Length) { sb.Append(c); continue; }
                 char n = s[++i];
                 switch(n)
                 {
