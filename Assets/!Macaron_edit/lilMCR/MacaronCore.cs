@@ -624,7 +624,7 @@ namespace liltoon_MCR
             new object[] { "_MCR_SkinSmoothness", 0.5f, 0.1f },
             new object[] { "_MCR_SkinSheen", 0.3f, 0.7f },
             new object[] { "_MCR_SkinScatter", 0.5f, 0f },
-            new object[] { "_MCR_SkinMottle", 0.35f, 0.15f },
+            new object[] { "_MCR_SkinMottle", 0.35f, 0f },
         };
 
         /// <summary>Kind popup changed: sets the starting values of that kind and swaps the detail texture, unless the
