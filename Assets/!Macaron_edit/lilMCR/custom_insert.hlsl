@@ -1924,7 +1924,8 @@ void Macaron_MarkSpecEnd(inout lilFragData fd)
 // Called from BEFORE_EMISSION_1ST (see custom.hlsl): after lilToon's lighting, reflection, MatCap and rim light, and
 // inside the reflection range, so Occlusion on Reflections also removes the highlight inside creases.
 //
-// _MCR_SkinTex: RG = tangent-space normal (x, y), B = cavity (1 = groove / pore), A = mottling (blotches, small spots).
+// _MCR_SkinTex: RG = tangent-space normal (x, y), B = cavity (1 = skin line / pore), A = color variation around 0.5
+// (below: mottling, darker; above: capillaries, redder).
 // It is read twice: once at Tiling for the fine detail and once wider and turned, which hides the repetition of the
 // fine read and carries the mottling.
 
@@ -1934,6 +1935,8 @@ void Macaron_MarkSpecEnd(inout lilFragData fd)
 #define MCR_SKIN_WIDE_SIN 0.6
 // Reflectance of skin at normal incidence.
 #define MCR_SKIN_F0 0.028
+// Capillaries: what is left of the base color where one runs (a red tint).
+#define MCR_SKIN_VESSEL_TINT float3(1.0, 0.55, 0.55)
 // Width of the glow along the shadow edge, as a range of N.L around 0.
 #define MCR_SKIN_EDGE_WIDTH 0.38
 
@@ -1982,7 +1985,9 @@ void Macaron_Skin(inout lilFragData fd)
     float detail = max(_MCR_SkinDetail, 0.0) * mask;
     float3 Nd = normalize(N + (T * slope.x + B * slope.y) * detail);
     float cavity = fine.b * saturate(detail);
-    float mottle = wide.a;
+    float variation = wide.a * 2.0 - 1.0;
+    float mottle = saturate(-variation);
+    float vessel = saturate(variation);
 
     float3 L = fd.L;
     float3 V = fd.V;
@@ -1991,8 +1996,10 @@ void Macaron_Skin(inout lilFragData fd)
     float3 colIn = fd.col.rgb;
     float3 col = colIn;
 
-    // 1. Surface color: mottling, darker grooves, and the relief of the detail normal against the light.
-    col *= lerp(1.0.xxx, _MCR_SkinMottleColor.rgb, saturate(mottle * _MCR_SkinMottle * _MCR_SkinMottleColor.a) * mask);
+    // 1. Surface color: mottling, capillaries, darker skin lines, and the relief of the detail normal against the light.
+    float variationAmount = saturate(_MCR_SkinMottle) * mask;
+    col *= lerp(1.0.xxx, _MCR_SkinMottleColor.rgb, saturate(mottle * _MCR_SkinMottleColor.a) * variationAmount);
+    col *= lerp(1.0.xxx, MCR_SKIN_VESSEL_TINT, vessel * variationAmount);
     col *= 1.0 - cavity * 0.10;
     col *= clamp(1.0 + (dot(Nd, L) - nl) * 0.9, 0.6, 1.4);
 

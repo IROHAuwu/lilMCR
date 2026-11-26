@@ -359,9 +359,9 @@ namespace liltoon_MCR
             skin.Props.Add(P("_MCR_SkinSheen", "邊緣柔光", MacaronPropKind.Slider, "斜看皮膚時邊緣的一層淡淡反光。"));
             skin.Props.Add(P("_MCR_SkinScatter", "透光感", MacaronPropKind.Slider, "明暗交界處的暖色，以及逆光時邊緣的透光。"));
             skin.Props.Add(Adv(P("_MCR_SkinScatterColor", "透光顏色", MacaronPropKind.Color)));
-            skin.Props.Add(P("_MCR_SkinMottle", "膚色斑駁", MacaronPropKind.Slider, "讓膚色有自然的深淺不均與小斑點。"));
+            skin.Props.Add(P("_MCR_SkinMottle", "膚色斑駁", MacaronPropKind.Slider, "讓膚色有自然的深淺不均、小斑點與淡淡的微血管。"));
             skin.Props.Add(Adv(P("_MCR_SkinMottleColor", "斑駁顏色", MacaronPropKind.Color)));
-            skin.Props.Add(Adv(P("_MCR_SkinTex", "細紋貼圖", MacaronPropKind.Texture, "RG = 法線、B = 凹陷、A = 斑駁。留空時開啟會自動填入內附的貼圖。")));
+            skin.Props.Add(Adv(P("_MCR_SkinTex", "細紋貼圖", MacaronPropKind.Texture, "RG = 法線、B = 凹陷、A = 顏色變化（低於 0.5 = 斑駁、高於 0.5 = 微血管）。留空時開啟會自動填入內附的貼圖。")));
             MacaronProp skinMask = Adv(P("_MCR_SkinMask", "膚質遮罩", MacaronPropKind.Texture, "白 = 有膚質效果、黑 = 排除（R 通道）。可用遮罩生成器製作。"));
             skinMask.TextureExtra = "_MCR_SkinMaskAmount";
             skin.Props.Add(skinMask);
@@ -773,12 +773,12 @@ namespace liltoon_MCR
 
         public const int TierLightest = 0, TierLight = 1, TierStandard = 2, TierHigh = 3, TierOverkill = 4;
         // Styles follow the quality tiers (TierStyleFirst..TierMax); the buttons show them in a block of their own.
-        public const int TierStyleDeep = 5, TierStylePink = 6, TierStyleCyan = 7;
+        public const int TierStyleDeep = 5, TierStylePink = 6, TierStyleCyan = 7, TierStyleStd = 8;
         public const int TierStyleFirst = TierStyleDeep;
         /// <summary>The last tier (tiers are 0..TierMax).</summary>
-        public const int TierMax = TierStyleCyan;
+        public const int TierMax = TierStyleStd;
         public const string TierStyleHeader = "風格化";
-        public static readonly string[] TierLabels = { "最輕量", "輕量", "標準", "高品質", "Overkill", "POI風(濃)", "POI風(軟粉)", "POI風(軟青)" };
+        public static readonly string[] TierLabels = { "最輕量", "輕量", "標準", "高品質", "Overkill", "POI風(濃)", "POI風(軟粉)", "POI風(軟青)", "POI風(標準)" };
         public static readonly string[] TierTooltips =
         {
             "預估成本：角色像素 +40～70%（對比 lilMCR 全關）。",
@@ -789,6 +789,7 @@ namespace liltoon_MCR
             "柔和 SSAO（最高品質，每像素 32 次取樣）搭配柔邊的接觸陰影。縫隙的陰影又深又窄，顏色跟著材質本身的顏色。",
             "柔和 SSAO（最高品質，每像素 32 次取樣）搭配細的接觸陰影，陰影帶粉色。粉色會套用到所有材質，要改請調「近處顏色」或把「帶入底色」調回 1。",
             "和「POI風(軟粉)」相同的柔和 SSAO 與細接觸陰影，陰影改為淡青色。顏色會套用到所有材質，要改請調「近處顏色」或把「帶入底色」調回 1。",
+            "柔和 SSAO（最高品質，每像素 32 次取樣）範圍中等、顏色為黑色，搭配較長（5 cm）的灰色接觸陰影。整體比「POI風(濃)」柔和、均勻。",
         };
 
         private static KeyValuePair<string, Vector4> T(string name, float x, float y, float z, float w)
@@ -1020,6 +1021,36 @@ namespace liltoon_MCR
             T("_MCR_ShadowColor", 0.698f, 0.788f, 0.855f, 1f),
         });
 
+        // Standard: Soft SSAO at its best quality with a medium Radius and a plain black tint, and a longer gray contact
+        // shadow without the back side shade.
+        private static readonly KeyValuePair<string, Vector4>[] TierStyleStd_ = WithOverrides(new[]
+        {
+            T("_MCR_OccMethod", 3f, 0f, 0f, 0f),
+            T("_MCR_OccQuality", 3f, 0f, 0f, 0f),
+            T("_MCR_OccAmount", 1f, 0f, 0f, 0f),
+            T("_MCR_OccContrast", -0.2f, 0f, 0f, 0f),
+            T("_MCR_OccNoise", 0.2f, 0f, 0f, 0f),
+            T("_MCR_OccAlbedoTint", 0f, 0f, 0f, 0f),
+            T("_MCR_OccTintNear", 0f, 0f, 0f, 1f),
+            T("_MCR_SSAOEdgeReject", 0.3f, 0f, 0f, 0f),
+            T("_MCR_SoftRadius", 0.009f, 0f, 0f, 0f),
+            T("_MCR_SoftDepthReach", 0.3f, 0f, 0f, 0f),
+            T("_MCR_SoftFocus", 0.38f, 0f, 0f, 0f),
+            T("_MCR_SoftLift", 0.09f, 0f, 0f, 0f),
+            T("_MCR_SoftBias", 0.0006f, 0f, 0f, 0f),
+            T("_MCR_SoftClean", 0.38f, 0f, 0f, 0f),
+            T("_MCR_ShadowIntensity", 0.865f, 0f, 0f, 0f),
+            T("_MCR_ShadowColor", 0.311f, 0.311f, 0.311f, 1f),
+            T("_MCR_ShadowLength", 0.05f, 0f, 0f, 0f),
+            T("_MCR_ShadowThickness", 0.003f, 0f, 0f, 0f),
+            // Keeps surfaces that face away from the light from shading themselves (long shadow, thick occluder).
+            T("_MCR_ShadowNormalReject", 0.5f, 0f, 0f, 0f),
+            T("_MCR_ShadowSoftness", 0f, 0f, 0f, 0f),
+            T("_MCR_ShadowQuality", 2f, 0f, 0f, 0f),
+            T("_MCR_ShadowJitter", 0.5f, 0f, 0f, 0f),
+            T("_MCR_ShadowBackShade", 0f, 0f, 0f, 0f),
+        });
+
         // The base table with the override lists applied in order (a later list wins).
         private static KeyValuePair<string, Vector4>[] WithOverrides(params KeyValuePair<string, Vector4>[][] overrideLists)
         {
@@ -1045,6 +1076,7 @@ namespace liltoon_MCR
                 case TierStyleDeep: return TierStyleDeep_;
                 case TierStylePink: return TierStylePink_;
                 case TierStyleCyan: return TierStyleCyan_;
+                case TierStyleStd: return TierStyleStd_;
                 default: return TierStandard_;
             }
         }
