@@ -1023,7 +1023,7 @@ namespace liltoon_MCR
         });
 
         // Standard: Soft SSAO at its best quality with a medium Radius and a plain black tint, and a longer gray contact
-        // shadow without the back side shade.
+        // shadow with most of the back side shade.
         private static readonly KeyValuePair<string, Vector4>[] TierStyleStd_ = WithOverrides(new[]
         {
             T("_MCR_OccMethod", 3f, 0f, 0f, 0f),
@@ -1049,7 +1049,7 @@ namespace liltoon_MCR
             T("_MCR_ShadowSoftness", 0f, 0f, 0f, 0f),
             T("_MCR_ShadowQuality", 2f, 0f, 0f, 0f),
             T("_MCR_ShadowJitter", 0.5f, 0f, 0f, 0f),
-            T("_MCR_ShadowBackShade", 0f, 0f, 0f, 0f),
+            T("_MCR_ShadowBackShade", 0.75f, 0f, 0f, 0f),
         });
 
         // The base table with the override lists applied in order (a later list wins).
@@ -1598,7 +1598,7 @@ namespace liltoon_MCR
         }
 
         // Style buttons per row (the block grows by rows as styles are added).
-        private const int StylesPerRow = 3;
+        private const int StylesPerRow = 4;
 
         /// <summary>The quality tier buttons in one row and, under them, the style buttons in a block of their own.
         /// Returns the tier clicked, or -1.</summary>
