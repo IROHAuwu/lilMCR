@@ -431,6 +431,7 @@ struct MCRSurface
     float viewDepth;    // positionCS.w
     float3 positionVS;  // this fragment in view space
     float3 nView;       // smooth normal in view space, facing the camera
+    float3 nLight;      // smooth normal in view space as the mesh has it (see MCR_GetSurface)
     float3 nFacet;      // normal of the triangle itself in view space (the surface the depth texture holds), facing the camera
     float smoothing;    // 0..1
 };
@@ -450,6 +451,11 @@ MCRSurface MCR_GetSurface(lilFragData fd, MCRDepthInfo di)
     n *= rsqrt(max(dot(n, n), MCR_EPS));
     // Back faces / double-sided cloth: use the side that faces the camera.
     s.nView = dot(n, centerRay) > 0.0 ? -n : n;
+    // For "which way does the surface face the light": the vertex normal as the mesh has it. Only the back face of a
+    // double-sided mesh is turned round. On a front face an edited normal (the underside of a jaw, the top of a neck)
+    // can point slightly away from the camera when seen at a flat angle; turned round it was mirrored, and the back
+    // shade flipped between lit and shaded along a hard, stepped line that moved with the view.
+    s.nLight = fd.facing < 0.0 ? s.nView : n;
     s.nFacet = s.nView;     // replaced by MCR_SetFacetNormal when the triangle normal is known
     s.smoothing = saturate(_MCR_NormalSmooth);
     return s;
@@ -1592,15 +1598,7 @@ float MCR_ShadowBlock(MCRShadowRay r, MCRSurface s, MCRDepthInfo di, float t, in
 float MCR_CalcContactShadow(MCRSurface s, MCRDepthInfo di, out float backShade)
 {
     float3 lightVS = MCR_ShadowLightDirView();
-    // Which way the surface faces the light. The smooth normal, on the side of the triangle (s.nView is turned toward
-    // the camera: seen at a flat angle, an edited vertex normal pointing slightly away got mirrored, and the back
-    // shade flipped to lit along a hard, stepped line). Where the vertex normal is nearly at a right angle to the
-    // triangle or beyond (edited normals: the underside of a jaw shaded like the front of the face) it does not
-    // tell which way the surface really faces, so the triangle normal takes over there.
-    float facetDot = dot(s.nView, s.nFacet);
-    float3 nLight = facetDot < 0.0 ? -s.nView : s.nView;
-    nLight = normalize(lerp(s.nFacet, nLight, smoothstep(0.25, 0.6, abs(facetDot))));
-    float ndl = dot(nLight, lightVS);
+    float ndl = dot(s.nLight, lightVS);
     backShade = 1.0 - smoothstep(-0.12, 0.28, ndl);
 
     float normalWeight = lerp(1.0, smoothstep(-0.05, 0.25, ndl), saturate(_MCR_ShadowNormalReject));
