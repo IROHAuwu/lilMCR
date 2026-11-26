@@ -1592,7 +1592,15 @@ float MCR_ShadowBlock(MCRShadowRay r, MCRSurface s, MCRDepthInfo di, float t, in
 float MCR_CalcContactShadow(MCRSurface s, MCRDepthInfo di, out float backShade)
 {
     float3 lightVS = MCR_ShadowLightDirView();
-    float ndl = dot(s.nView, lightVS);
+    // Which way the surface faces the light. The smooth normal, on the side of the triangle (s.nView is turned toward
+    // the camera: seen at a flat angle, an edited vertex normal pointing slightly away got mirrored, and the back
+    // shade flipped to lit along a hard, stepped line). Where the vertex normal is nearly at a right angle to the
+    // triangle or beyond (edited normals: the underside of a jaw shaded like the front of the face) it does not
+    // tell which way the surface really faces, so the triangle normal takes over there.
+    float facetDot = dot(s.nView, s.nFacet);
+    float3 nLight = facetDot < 0.0 ? -s.nView : s.nView;
+    nLight = normalize(lerp(s.nFacet, nLight, smoothstep(0.25, 0.6, abs(facetDot))));
+    float ndl = dot(nLight, lightVS);
     backShade = 1.0 - smoothstep(-0.12, 0.28, ndl);
 
     float normalWeight = lerp(1.0, smoothstep(-0.05, 0.25, ndl), saturate(_MCR_ShadowNormalReject));
