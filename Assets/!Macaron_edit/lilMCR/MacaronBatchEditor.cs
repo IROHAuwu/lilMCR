@@ -567,8 +567,7 @@ namespace liltoon_MCR
             foreach(Material m in mats)
             {
                 // Method change: each material keeps its own per-method shared settings.
-                if(prop.Name == MacaronCore.PropOccMethod) MacaronCore.SwitchOccMethod(m, work.GetFloat(prop.Name));
-                else MacaronCore.CopyProperty(work, m, prop.Name);
+                if(!MacaronCore.SwitchPopup(m, prop.Name, work.GetFloat(prop.Name))) MacaronCore.CopyProperty(work, m, prop.Name);
                 EditorUtility.SetDirty(m);
             }
             // A method change also restores that method's own shared settings: show them.

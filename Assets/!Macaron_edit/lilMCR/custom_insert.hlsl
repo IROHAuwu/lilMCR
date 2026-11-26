@@ -2058,7 +2058,7 @@ void Macaron_SkinBegin(inout lilFragData fd)
 
     // Detail normal: the fine read plus a part of the wide one (turned back into the fine read's frame).
     float2 w = wide.xy * 2.0 - 1.0;
-    float2 slope = fine.xy + float2(w.x * MCR_SKIN_WIDE_COS + w.y * MCR_SKIN_WIDE_SIN, w.y * MCR_SKIN_WIDE_COS - w.x * MCR_SKIN_WIDE_SIN) * 0.3;
+    float2 slope = fine.xy + float2(w.x * MCR_SKIN_WIDE_COS + w.y * MCR_SKIN_WIDE_SIN, w.y * MCR_SKIN_WIDE_COS - w.x * MCR_SKIN_WIDE_SIN) * _MCR_SkinWide;
     float detail = max(_MCR_SkinDetail, 0.0) * mask;
     float3 bend = (T * slope.x + B * slope.y) * detail;
     float3 Nd = normalize(N + bend);

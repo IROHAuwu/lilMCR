@@ -352,8 +352,11 @@ namespace liltoon_MCR
                 Id = "skin", Title = "膚質", EnableProp = "_MCR_SkinEnable",
                 Help = "在皮膚上加上細紋、柔和高光與明暗交界的透光感。全部由 lilMCR 自己繪製，不會更動材質原本的 lilToon 設定。只建議用在身體的皮膚材質。"
             };
+            skin.Props.Add(Popup(PropSkinKind, "種類", new[] { "皮膚", "布料纖維" }, new[] { 0f, 1f },
+                "切換時會換成對應的細紋貼圖，並把下面的數值設成該種類的起始值。布料纖維：平織的經緯線，沒有透光感與微血管，高光較弱、邊緣柔光較強。"));
             skin.Props.Add(P("_MCR_SkinDetail", "細紋強度", MacaronPropKind.Slider, "皮膚紋理與毛孔的凹凸感。0 = 沒有細紋。"));
             skin.Props.Add(P("_MCR_SkinLilNormal", "套用到 lilToon 的反光", MacaronPropKind.Slider, "讓 lilToon 本身的反射、MatCap、邊緣光也跟著細紋起伏。0 = 只有膚質自己的高光有細紋。"));
+            skin.Props.Add(Adv(P("_MCR_SkinWide", "大範圍起伏", MacaronPropKind.Slider, "把同一張貼圖放大、轉個角度再疊一層，讓細紋不會看起來太規律。布料建議 0（否則會多出一層較粗的織紋）。")));
             skin.Props.Add(P("_MCR_SkinEven", "均勻密度", MacaronPropKind.Toggle, "不管 UV 怎麼拉伸（包含形態鍵造成的拉伸），細紋在表面上都保持同樣的大小。會多讀 3 次貼圖。關閉時細紋直接跟著 UV，拉伸的地方紋路也會被拉長。"));
             skin.Props.Add(When(P("_MCR_SkinSize", "細紋大小 (m)", MacaronPropKind.Slider, "一張細紋貼圖在表面上蓋住的寬度。數值越小紋路越細。"), g => g("_MCR_SkinEven") > 0.5f));
             skin.Props.Add(When(P("_MCR_SkinTiling", "細紋密度", MacaronPropKind.Slider, "細紋貼圖在 UV 上重複的次數。數值越大紋路越細。"), g => g("_MCR_SkinEven") <= 0.5f));
@@ -601,13 +604,65 @@ namespace liltoon_MCR
         // Skin: the detail texture shipped with lilMCR (Textures/MCR_SkinDetail.png).
         public const string SkinTexGuid = "c3a1f0d2b7e44c6f9a58d1e2037b64aa";
 
+        // Cloth fiber: plain weave (Textures/MCR_ClothDetail.png), same channel layout as the skin texture.
+        public const string ClothTexGuid = "d4b2e1c3a8f55d70ab69e2f3148c75bb";
+        public const string PropSkinKind = "_MCR_SkinKind";
+
+        private static string SkinKindTexGuid(Material m)
+        {
+            return m.HasProperty(PropSkinKind) && m.GetFloat(PropSkinKind) > 0.5f ? ClothTexGuid : SkinTexGuid;
+        }
+
+        // Starting values of each kind: { property, skin, cloth }.
+        private static readonly object[][] SkinKindFloats =
+        {
+            new object[] { "_MCR_SkinDetail", 1f, 1f },
+            new object[] { "_MCR_SkinSize", 0.04f, 0.06f },
+            new object[] { "_MCR_SkinTiling", 30f, 16f },
+            new object[] { "_MCR_SkinWide", 0.3f, 0f },
+            new object[] { "_MCR_SkinSpecular", 1.5f, 0.35f },
+            new object[] { "_MCR_SkinSmoothness", 0.5f, 0.1f },
+            new object[] { "_MCR_SkinSheen", 0.3f, 0.7f },
+            new object[] { "_MCR_SkinScatter", 0.5f, 0f },
+            new object[] { "_MCR_SkinMottle", 0.35f, 0.15f },
+        };
+
+        /// <summary>Kind popup changed: sets the starting values of that kind and swaps the detail texture, unless the
+        /// slot holds a texture of the user's own. The caller records Undo / marks dirty.</summary>
+        public static void SwitchSkinKind(Material m, float kind)
+        {
+            if(m == null || !m.HasProperty(PropSkinKind)) return;
+            bool cloth = kind > 0.5f;
+            m.SetFloat(PropSkinKind, cloth ? 1f : 0f);
+            foreach(object[] row in SkinKindFloats)
+            {
+                string name = (string)row[0];
+                if(m.HasProperty(name)) m.SetFloat(name, (float)row[cloth ? 2 : 1]);
+            }
+            if(m.HasProperty("_MCR_SkinMottleColor"))
+                m.SetColor("_MCR_SkinMottleColor", cloth ? new Color(0.55f, 0.55f, 0.55f, 1f) : new Color(0.8f, 0.52f, 0.48f, 1f));
+            if(!m.HasProperty("_MCR_SkinTex")) return;
+            string current = AssetDatabase.AssetPathToGUID(AssetDatabase.GetAssetPath(m.GetTexture("_MCR_SkinTex")));
+            if(m.GetTexture("_MCR_SkinTex") != null && current != SkinTexGuid && current != ClothTexGuid) return;
+            Texture tex = AssetDatabase.LoadAssetAtPath<Texture>(AssetDatabase.GUIDToAssetPath(cloth ? ClothTexGuid : SkinTexGuid));
+            if(tex != null) m.SetTexture("_MCR_SkinTex", tex);
+        }
+
+        /// <summary>Popups whose change does more than set the value. Returns false for an ordinary popup.</summary>
+        public static bool SwitchPopup(Material m, string name, float value)
+        {
+            if(name == PropOccMethod) { SwitchOccMethod(m, value); return true; }
+            if(name == PropSkinKind) { SwitchSkinKind(m, value); return true; }
+            return false;
+        }
+
         /// <summary>Skin turned on with an empty detail texture slot: fills in the texture shipped with lilMCR.
         /// Returns true when the material was changed (the caller records Undo / marks dirty).</summary>
         public static bool EnsureSkinTexture(Material m)
         {
             if(m == null || !m.HasProperty("_MCR_SkinTex") || !m.HasProperty("_MCR_SkinEnable")) return false;
             if(m.GetFloat("_MCR_SkinEnable") <= 0.5f || m.GetTexture("_MCR_SkinTex") != null) return false;
-            Texture tex = AssetDatabase.LoadAssetAtPath<Texture>(AssetDatabase.GUIDToAssetPath(SkinTexGuid));
+            Texture tex = AssetDatabase.LoadAssetAtPath<Texture>(AssetDatabase.GUIDToAssetPath(SkinKindTexGuid(m)));
             if(tex == null) return false;
             m.SetTexture("_MCR_SkinTex", tex);
             return true;

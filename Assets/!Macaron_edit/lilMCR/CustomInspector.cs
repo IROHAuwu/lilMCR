@@ -222,7 +222,7 @@ namespace lilToon
             if(EditorGUI.EndChangeCheck())
             {
                 float value = values[Mathf.Clamp(picked, 0, values.Length - 1)];
-                if(prop.Name == MacaronCore.PropOccMethod)
+                if(prop.Name == MacaronCore.PropOccMethod || prop.Name == MacaronCore.PropSkinKind)
                 {
                     // Each method keeps its own shared settings (first switch to SSAO: SSAO starting values).
                     Undo.RecordObjects(p.targets, "Macaron Occlusion Method");
@@ -230,7 +230,7 @@ namespace lilToon
                     {
                         Material m = o as Material;
                         if(m == null) continue;
-                        MacaronCore.SwitchOccMethod(m, value);
+                        MacaronCore.SwitchPopup(m, prop.Name, value);
                         EditorUtility.SetDirty(m);
                     }
                     EditorGUI.showMixedValue = false;
