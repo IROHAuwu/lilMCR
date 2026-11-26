@@ -356,7 +356,7 @@ namespace liltoon_MCR
                 "切換時會換成對應的細紋貼圖，並把下面的數值設成該種類的起始值。布料纖維：平織的經緯線，沒有透光感與微血管，高光較弱、邊緣柔光較強。"));
             skin.Props.Add(P("_MCR_SkinDetail", "細紋強度", MacaronPropKind.Slider, "皮膚紋理與毛孔的凹凸感。0 = 沒有細紋。"));
             skin.Props.Add(P("_MCR_SkinLilNormal", "套用到 lilToon 的反光", MacaronPropKind.Slider, "讓 lilToon 本身的反射、MatCap、邊緣光也跟著細紋起伏。0 = 只有部位細節自己的高光有細紋。"));
-            skin.Props.Add(Adv(P("_MCR_SkinWide", "大範圍起伏", MacaronPropKind.Slider, "把同一張貼圖放大、轉個角度再疊一層，讓細紋不會看起來太規律。布料建議 0（否則會多出一層較粗的織紋）。")));
+            skin.Props.Add(Adv(P("_MCR_SkinWide", "大範圍起伏", MacaronPropKind.Slider, "把同一張貼圖放大、轉個角度再疊一層，讓細紋不會看起來太規律。這一層固定跟著 UV，不受「均勻密度」控制，所以預設是 0。")));
             skin.Props.Add(P("_MCR_SkinEven", "均勻密度", MacaronPropKind.Toggle, "不管 UV 怎麼拉伸（包含形態鍵造成的拉伸），細紋在表面上都保持同樣的大小。會多讀 3 次貼圖。關閉時細紋直接跟著 UV，拉伸的地方紋路也會被拉長。"));
             skin.Props.Add(When(P("_MCR_SkinSize", "細紋大小 (m)", MacaronPropKind.Slider, "一張細紋貼圖在表面上蓋住的寬度。數值越小紋路越細。"), g => g("_MCR_SkinEven") > 0.5f));
             skin.Props.Add(When(P("_MCR_SkinTiling", "細紋密度", MacaronPropKind.Slider, "細紋貼圖在 UV 上重複的次數。數值越大紋路越細。"), g => g("_MCR_SkinEven") <= 0.5f));
@@ -619,7 +619,7 @@ namespace liltoon_MCR
             new object[] { "_MCR_SkinDetail", 1f, 1f },
             new object[] { "_MCR_SkinSize", 0.04f, 0.06f },
             new object[] { "_MCR_SkinTiling", 30f, 16f },
-            new object[] { "_MCR_SkinWide", 0.3f, 0f },
+            new object[] { "_MCR_SkinWide", 0f, 0f },
             new object[] { "_MCR_SkinSpecular", 1.5f, 0.35f },
             new object[] { "_MCR_SkinSmoothness", 0.5f, 0.1f },
             new object[] { "_MCR_SkinSheen", 0.3f, 0.7f },
