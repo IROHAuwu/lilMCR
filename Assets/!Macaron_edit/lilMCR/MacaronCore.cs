@@ -354,7 +354,9 @@ namespace liltoon_MCR
             };
             skin.Props.Add(P("_MCR_SkinDetail", "細紋強度", MacaronPropKind.Slider, "皮膚紋理與毛孔的凹凸感。0 = 沒有細紋。"));
             skin.Props.Add(P("_MCR_SkinLilNormal", "套用到 lilToon 的反光", MacaronPropKind.Slider, "讓 lilToon 本身的反射、MatCap、邊緣光也跟著細紋起伏。0 = 只有膚質自己的高光有細紋。"));
-            skin.Props.Add(P("_MCR_SkinTiling", "細紋密度", MacaronPropKind.Slider, "細紋貼圖在 UV 上重複的次數。數值越大紋路越細。"));
+            skin.Props.Add(P("_MCR_SkinEven", "均勻密度", MacaronPropKind.Toggle, "不管 UV 怎麼拉伸（包含形態鍵造成的拉伸），細紋在表面上都保持同樣的大小。會多讀 3 次貼圖。關閉時細紋直接跟著 UV，拉伸的地方紋路也會被拉長。"));
+            skin.Props.Add(When(P("_MCR_SkinSize", "細紋大小 (m)", MacaronPropKind.Slider, "一張細紋貼圖在表面上蓋住的寬度。數值越小紋路越細。"), g => g("_MCR_SkinEven") > 0.5f));
+            skin.Props.Add(When(P("_MCR_SkinTiling", "細紋密度", MacaronPropKind.Slider, "細紋貼圖在 UV 上重複的次數。數值越大紋路越細。"), g => g("_MCR_SkinEven") <= 0.5f));
             skin.Props.Add(P("_MCR_SkinSpecular", "高光強度", MacaronPropKind.Slider));
             skin.Props.Add(P("_MCR_SkinSmoothness", "光滑度", MacaronPropKind.Slider, "數值越大高光越小越亮（像出汗或上油），越小越霧面。"));
             skin.Props.Add(P("_MCR_SkinSheen", "邊緣柔光", MacaronPropKind.Slider, "斜看皮膚時邊緣的一層淡淡反光。"));

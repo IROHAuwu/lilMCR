@@ -1964,9 +1964,9 @@ void Macaron_SkinBegin(inout lilFragData fd)
     if(!(_MCR_SkinEnable > 0.5 && _MCR_Active > 0.5 && MCR_MenuActive() && Macaron_LocalVisible())) return;
     if(Macaron_IsWorldCapture()) return;
 
-    float2 uvFine = fd.uvMain * max(_MCR_SkinTiling, 1.0);
+    float tiling = max(_MCR_SkinTiling, 1.0);
+    float2 uvFine = fd.uvMain * tiling;
     float2 uvWide = float2(uvFine.x * MCR_SKIN_WIDE_COS - uvFine.y * MCR_SKIN_WIDE_SIN, uvFine.x * MCR_SKIN_WIDE_SIN + uvFine.y * MCR_SKIN_WIDE_COS) * MCR_SKIN_WIDE_SCALE + 0.37;
-    float4 fine = LIL_SAMPLE_2D(_MCR_SkinTex, lil_sampler_linear_repeat, uvFine);
     float4 wide = LIL_SAMPLE_2D(_MCR_SkinTex, lil_sampler_linear_repeat, uvWide);
     float mask = 1.0;
     if(_MCR_SkinMaskAmount > 0.0)
@@ -1992,6 +1992,42 @@ void Macaron_SkinBegin(inout lilFragData fd)
     T *= frameScale;
     B *= frameScale;
 
+    // Fine read (explicit gradients, so it can sit inside a branch): x, y = slope, z = cavity.
+    float3 fine;
+    [branch]
+    if(_MCR_SkinEven > 0.5)
+    {
+        // Even Density: the main UV is stretched differently from place to place (and by blend shapes), which would
+        // stretch the skin lines with it. How many meters one UV unit covers along U and along V is known from the
+        // derivatives, so each axis gets the tiling that draws one tile per Size meters there. Tilings are powers of
+        // two (the texture stays seamless); the two nearest ones are blended on each axis, 4 reads in all.
+        float det = dux.x * duy.y - dux.y * duy.x;
+        float invDet = 1.0 / (abs(det) > 1e-20 ? det : 1e-20);
+        float3 Pu = (dpx * duy.y - dpy * dux.y) * invDet;
+        float3 Pv = (dpy * dux.x - dpx * duy.x) * invDet;
+        float2 level = clamp(log2(max(float2(length(Pu), length(Pv)) / max(_MCR_SkinSize, 0.001), 1e-6)), -2.0, 12.0);
+        float2 lower = floor(level);
+        float2 f = level - lower;
+        float2 scaleLow = exp2(lower);
+        // A tiling coarser than wanted draws the detail larger, so its slopes are shallower by the same factor
+        // (and steeper for the finer one).
+        float2 slopeLow = exp2(-f);
+        fine = 0.0;
+        for(int i = 0; i < 4; i++)
+        {
+            float2 pick = float2(i & 1, i >> 1);
+            float2 scale = scaleLow * (1.0 + pick);
+            float2 wgt2 = lerp(1.0 - f, f, pick);
+            float4 t = LIL_SAMPLE_2D_GRAD(_MCR_SkinTex, lil_sampler_linear_repeat, fd.uvMain * scale, dux * scale, duy * scale);
+            fine += float3((t.xy * 2.0 - 1.0) * slopeLow * (1.0 + pick), t.b) * (wgt2.x * wgt2.y);
+        }
+    }
+    else
+    {
+        float4 t = LIL_SAMPLE_2D_GRAD(_MCR_SkinTex, lil_sampler_linear_repeat, uvFine, dux * tiling, duy * tiling);
+        fine = float3(t.xy * 2.0 - 1.0, t.b);
+    }
+
     #if defined(LIL_RENDER) && LIL_RENDER == 2
         mask *= saturate(fd.col.a);
     #endif
@@ -2002,11 +2038,11 @@ void Macaron_SkinBegin(inout lilFragData fd)
 
     // Detail normal: the fine read plus a part of the wide one (turned back into the fine read's frame).
     float2 w = wide.xy * 2.0 - 1.0;
-    float2 slope = (fine.xy * 2.0 - 1.0) + float2(w.x * MCR_SKIN_WIDE_COS + w.y * MCR_SKIN_WIDE_SIN, w.y * MCR_SKIN_WIDE_COS - w.x * MCR_SKIN_WIDE_SIN) * 0.3;
+    float2 slope = fine.xy + float2(w.x * MCR_SKIN_WIDE_COS + w.y * MCR_SKIN_WIDE_SIN, w.y * MCR_SKIN_WIDE_COS - w.x * MCR_SKIN_WIDE_SIN) * 0.3;
     float detail = max(_MCR_SkinDetail, 0.0) * mask;
     float3 bend = (T * slope.x + B * slope.y) * detail;
     float3 Nd = normalize(N + bend);
-    float cavity = fine.b * saturate(detail);
+    float cavity = fine.z * saturate(detail);
     float variation = wide.a * 2.0 - 1.0;
     float mottle = saturate(-variation);
     float vessel = saturate(variation);

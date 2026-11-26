@@ -112,7 +112,9 @@
     float _MCR_SkinMottle; \
     float4 _MCR_SkinMottleColor; \
     float _MCR_SkinMaskAmount; \
-    float _MCR_SkinLilNormal;
+    float _MCR_SkinLilNormal; \
+    float _MCR_SkinEven; \
+    float _MCR_SkinSize;
 
 // Textures only. Sampled with lilToon's shared sampler (lil_sampler_linear_repeat), so no sampler is added.
 #define LIL_CUSTOM_TEXTURES \

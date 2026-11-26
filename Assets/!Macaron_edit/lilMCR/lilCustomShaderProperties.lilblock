@@ -89,6 +89,8 @@
         [ToggleUI] _MCR_SkinEnable ("Skin", Float) = 0
         [NoScaleOffset] _MCR_SkinTex ("Skin Detail (RG normal, B cavity, A color variation)", 2D) = "gray" {}
         _MCR_SkinTiling ("Skin Detail Tiling", Range(1, 80)) = 30
+        [ToggleUI] _MCR_SkinEven ("Skin Even Density", Float) = 1
+        _MCR_SkinSize ("Skin Detail Size (m)", Range(0.005, 0.2)) = 0.04
         _MCR_SkinDetail ("Skin Detail Strength", Range(0, 2)) = 1
         _MCR_SkinSpecular ("Skin Highlight", Range(0, 4)) = 1.5
         _MCR_SkinSmoothness ("Skin Smoothness", Range(0, 1)) = 0.5
