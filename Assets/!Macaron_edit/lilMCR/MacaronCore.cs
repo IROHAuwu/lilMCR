@@ -349,13 +349,13 @@ namespace liltoon_MCR
             // the skin materials only. Turning it on fills an empty detail texture slot (EnsureSkinTexture).
             MacaronSection skin = new MacaronSection
             {
-                Id = "skin", Title = "膚質", EnableProp = "_MCR_SkinEnable",
+                Id = "skin", Title = "部位細節", EnableProp = "_MCR_SkinEnable",
                 Help = "在皮膚上加上細紋、柔和高光與明暗交界的透光感。全部由 lilMCR 自己繪製，不會更動材質原本的 lilToon 設定。只建議用在身體的皮膚材質。"
             };
             skin.Props.Add(Popup(PropSkinKind, "種類", new[] { "皮膚", "布料纖維" }, new[] { 0f, 1f },
                 "切換時會換成對應的細紋貼圖，並把下面的數值設成該種類的起始值。布料纖維：平織的經緯線，沒有透光感與微血管，高光較弱、邊緣柔光較強。"));
             skin.Props.Add(P("_MCR_SkinDetail", "細紋強度", MacaronPropKind.Slider, "皮膚紋理與毛孔的凹凸感。0 = 沒有細紋。"));
-            skin.Props.Add(P("_MCR_SkinLilNormal", "套用到 lilToon 的反光", MacaronPropKind.Slider, "讓 lilToon 本身的反射、MatCap、邊緣光也跟著細紋起伏。0 = 只有膚質自己的高光有細紋。"));
+            skin.Props.Add(P("_MCR_SkinLilNormal", "套用到 lilToon 的反光", MacaronPropKind.Slider, "讓 lilToon 本身的反射、MatCap、邊緣光也跟著細紋起伏。0 = 只有部位細節自己的高光有細紋。"));
             skin.Props.Add(Adv(P("_MCR_SkinWide", "大範圍起伏", MacaronPropKind.Slider, "把同一張貼圖放大、轉個角度再疊一層，讓細紋不會看起來太規律。布料建議 0（否則會多出一層較粗的織紋）。")));
             skin.Props.Add(P("_MCR_SkinEven", "均勻密度", MacaronPropKind.Toggle, "不管 UV 怎麼拉伸（包含形態鍵造成的拉伸），細紋在表面上都保持同樣的大小。會多讀 3 次貼圖。關閉時細紋直接跟著 UV，拉伸的地方紋路也會被拉長。"));
             skin.Props.Add(When(P("_MCR_SkinSize", "細紋大小 (m)", MacaronPropKind.Slider, "一張細紋貼圖在表面上蓋住的寬度。數值越小紋路越細。"), g => g("_MCR_SkinEven") > 0.5f));
@@ -368,10 +368,10 @@ namespace liltoon_MCR
             skin.Props.Add(P("_MCR_SkinMottle", "膚色斑駁", MacaronPropKind.Slider, "讓膚色有自然的深淺不均、小斑點與淡淡的微血管。"));
             skin.Props.Add(Adv(P("_MCR_SkinMottleColor", "斑駁顏色", MacaronPropKind.Color)));
             skin.Props.Add(Adv(P("_MCR_SkinTex", "細紋貼圖", MacaronPropKind.Texture, "RG = 法線、B = 凹陷、A = 顏色變化（低於 0.5 = 斑駁、高於 0.5 = 微血管）。留空時開啟會自動填入內附的貼圖。")));
-            MacaronProp skinMask = Adv(P("_MCR_SkinMask", "膚質遮罩", MacaronPropKind.Texture, "白 = 有膚質效果、黑 = 排除（R 通道）。可用遮罩生成器製作。"));
+            MacaronProp skinMask = Adv(P("_MCR_SkinMask", "部位細節遮罩", MacaronPropKind.Texture, "白 = 有部位細節效果、黑 = 排除（R 通道）。可用遮罩生成器製作。"));
             skinMask.TextureExtra = "_MCR_SkinMaskAmount";
             skin.Props.Add(skinMask);
-            MacaronProp skinMaskAmount = Adv(P("_MCR_SkinMaskAmount", "膚質遮罩強度", MacaronPropKind.Slider));
+            MacaronProp skinMaskAmount = Adv(P("_MCR_SkinMaskAmount", "部位細節遮罩強度", MacaronPropKind.Slider));
             skinMaskAmount.InlineExtra = true;
             skin.Props.Add(skinMaskAmount);
             list.Add(skin);
