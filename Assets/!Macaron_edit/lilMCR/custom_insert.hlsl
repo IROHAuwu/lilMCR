@@ -1525,6 +1525,8 @@ struct MCRShadowRay
     float thickness;     // base thickness + slope tolerance (see MCR_CalcContactShadow)
     float edge;          // depth behind the occluder over which the hit rises to full
     float rejectDist;
+    float turnedAway;    // 0..1: surface turning away from the light, the triangle plane test is lifted
+    float liftNear;      // occluders nearer than this never get the lifted test
     float depthBias;     // how far the depth texture sits in front of this surface at this pixel (>= 0)
 };
 
@@ -1572,7 +1574,14 @@ float MCR_ShadowBlock(MCRShadowRay r, MCRSurface s, MCRDepthInfo di, float t, in
     // next (sharp triangle-shaped shards). The tolerance grows with the distance by the bend allowed between
     // neighboring triangles (~10 deg), with a wide soft ramp: a real occluder clears it on every triangle alike.
     float facetTolerance = r.thickness + length(toOccluder) * MCR_FACET_BEND;
-    h *= smoothstep(facetTolerance, facetTolerance * 2.5, dot(toOccluder, s.nFacet));
+    // r.turnedAway lifts the test where the surface turns away from the light (see MCR_CalcContactShadow).
+    // Only for an occluder some distance away: what the test is there to remove (this surface read again at a flat
+    // angle) sits right next to the ray origin.
+    // And it has to stand above the plane of the smooth normal: a rounded shape stays below its own tangent plane
+    // (the far side of a chin or an arm is no occluder), the chin over the neck rises above it.
+    float lifted = r.turnedAway * smoothstep(r.liftNear, r.liftNear * 2.0, length(toOccluder))
+                 * smoothstep(0.5, 1.0, dot(toOccluder, s.nView) / (r.thickness + length(toOccluder) * 0.08) - 1.0);
+    h *= max(smoothstep(facetTolerance, facetTolerance * 2.5, dot(toOccluder, s.nFacet)), lifted);
     // Smooth tangent plane: the occluder must also rise above it by more than the polygon / curvature error.
     [branch]
     if(s.smoothing <= 0.0 || h <= 0.0) return h;
@@ -1619,6 +1628,17 @@ float MCR_CalcContactShadow(MCRSurface s, MCRDepthInfo di, out float backShade)
     // out instead of showing leftover bands. Such a surface covers only a thin strip of the screen.
     float grazingWeight = smoothstep(0.05, 0.18, facing);
     r.rejectDist = max(_MCR_ShadowReject, r.thickness * 2.0);
+    // Toward the side facing away from the light the ray leaves the surface at a flat angle, and the triangle plane
+    // test answered per triangle: one triangle still passed the occluder, its neighbor did not (a light gap with
+    // triangle-shaped edges between the cast shadow and the back shade). There the surface is about to be in its own
+    // shade anyway, so the test is lifted gradually by the smooth normal, which has no steps between triangles.
+    // Only in the band where the back shade fades in, and only with Back Side Shade in use: further round the back
+    // shade covers the surface by itself, and without it the far side stays as clean as before.
+    r.turnedAway = (1.0 - smoothstep(0.3, 0.6, ndl)) * smoothstep(-0.3, -0.1, ndl) * saturate(_MCR_ShadowBackShade * 4.0);
+    // Not where the triangle and the smooth normal disagree (faces with edited normals, a nose tip): the smooth
+    // normal does not tell there which way the surface really turns.
+    r.turnedAway *= smoothstep(0.7, 0.85, dot(s.nFacet, s.nView));
+    r.liftNear = 0.006 + r.thickness * 3.0;
     // Self calibration: the depth texture does not always hold this surface exactly where this pass draws it (shadow
     // caster bias of the depth render, depth precision, a slightly different vertex result). An offset of a few
     // millimeters toward the camera made the receiver shadow itself in patches with layered bands at any thickness
