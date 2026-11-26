@@ -836,7 +836,9 @@ namespace liltoon_MCR
         /// <summary>The last tier (tiers are 0..TierMax).</summary>
         public const int TierMax = TierStyleStd;
         public const string TierStyleHeader = "風格化";
-        public static readonly string[] TierLabels = { "最輕量", "輕量", "標準", "高品質", "Overkill", "POI風(濃)", "POI風(軟粉)", "POI風(軟青)", "POI風(標準)" };
+        public static readonly string[] TierLabels = { "最輕量", "輕量", "標準", "高品質", "Overkill", "POI風(濃)", "POI風(軟粉)", "POI風(軟青)", "POI風(超濃)" };
+        // Order of the style buttons (the tier numbers stay as they are: materials store them).
+        public static readonly int[] TierStyleOrder = { TierStyleDeep, TierStyleStd, TierStylePink, TierStyleCyan };
         public static readonly string[] TierTooltips =
         {
             "預估成本：角色像素 +40～70%（對比 lilMCR 全關）。",
@@ -1674,15 +1676,15 @@ namespace liltoon_MCR
             GUI.backgroundColor = old;
             GUILayout.Space(2f);
             EditorGUILayout.LabelField(ML.T(MacaronCore.TierStyleHeader), EditorStyles.miniBoldLabel);
-            for(int first = MacaronCore.TierStyleFirst; first <= MacaronCore.TierMax; first += StylesPerRow)
+            for(int first = 0; first < MacaronCore.TierStyleOrder.Length; first += StylesPerRow)
             {
                 using(new EditorGUILayout.HorizontalScope())
                 {
                     for(int n = 0; n < StylesPerRow; n++)
                     {
-                        int i = first + n;
                         // An unfinished row keeps the button width of a full one.
-                        if(i > MacaronCore.TierMax) { GUILayout.Label(GUIContent.none, GUILayout.Height(24f)); continue; }
+                        if(first + n >= MacaronCore.TierStyleOrder.Length) { GUILayout.Label(GUIContent.none, GUILayout.Height(24f)); continue; }
+                        int i = MacaronCore.TierStyleOrder[first + n];
                         GUI.backgroundColor = i == highlighted ? Accent : old;
                         if(TierButton(i)) clicked = i;
                     }
