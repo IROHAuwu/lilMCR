@@ -1539,8 +1539,12 @@ struct MCRShadowRay
 
 // Gradual hit: the hit rises to full over this fraction of the shadow length behind the occluder (plus the thickness).
 #define MCR_SHADOW_EDGE_FRAC 0.15
-// tan of the bend between neighboring triangles that still counts as one surface (triangle plane test in MCR_ShadowBlock).
-#define MCR_FACET_BEND 0.18
+// tan of the bend between the smooth tangent plane and a neighboring triangle that still counts as one surface (surface
+// plane test in MCR_ShadowBlock, ~7 deg), and the soft ramp above it. The smooth plane lies between the triangles, so it
+// needs less than the triangle plane did (0.18 / x2.5): with that, hair lying close over a concave spot (where the neck
+// meets the shoulder) was taken for the surface and left a light streak in its shadow.
+#define MCR_FACET_BEND 0.12
+#define MCR_FACET_RAMP 2.0
 
 float MCR_ShadowBlock(MCRShadowRay r, MCRSurface s, MCRDepthInfo di, float t, inout MCRDepthCache cache, out bool valid)
 {
@@ -1574,12 +1578,14 @@ float MCR_ShadowBlock(MCRShadowRay r, MCRSurface s, MCRDepthInfo di, float t, in
     float3 occluderVS = MCR_ViewRay(MCR_DepthTexelToEyeCenter(sampleTexel, di), di) * sceneDepth;
 #endif
     float3 toOccluder = occluderVS - s.positionVS;
-    // Triangle plane: a point of this triangle, or of a neighbor on a convex shape, lies on or below the plane of the
-    // triangle at any view angle; a real occluder (nose, hair, an arm) rises well above it. Seen at a grazing angle,
-    // the depth comparison alone cannot tell them apart (layered bands).
-    // The plane differs per triangle, so a fixed tolerance switched a real shadow on for one triangle and off for the
-    // next (sharp triangle-shaped shards). The tolerance grows with the distance by the bend allowed between
-    // neighboring triangles (~10 deg), with a wide soft ramp: a real occluder clears it on every triangle alike.
+    // Surface plane: a point of this surface, or of a neighbor on a convex shape, lies on or below the tangent plane at
+    // any view angle; a real occluder (nose, hair, an arm) rises well above it. Seen at a grazing angle, the depth
+    // comparison alone cannot tell them apart (layered bands), and on the side facing away from the light the ray
+    // runs into the body itself.
+    // The plane is the one of the smooth normal, not the triangle's: the triangle plane jumps from one triangle to the
+    // next, and inside a cast shadow single triangles were cut out of it (light triangle-shaped shards, e.g. in the hair
+    // shadow on the shoulder). The tolerance grows with the distance by the bend allowed between the smooth plane and
+    // the triangles, so the neighbors of a curved low-poly surface still count as the surface, with a soft ramp.
     float facetTolerance = r.thickness + length(toOccluder) * MCR_FACET_BEND;
     // r.turnedAway lifts the test where the surface turns away from the light (see MCR_CalcContactShadow).
     // Only for an occluder some distance away: what the test is there to remove (this surface read again at a flat
@@ -1588,7 +1594,7 @@ float MCR_ShadowBlock(MCRShadowRay r, MCRSurface s, MCRDepthInfo di, float t, in
     // (the far side of a chin or an arm is no occluder), the chin over the neck rises above it.
     float lifted = r.turnedAway * smoothstep(r.liftNear, r.liftNear * 2.0, length(toOccluder))
                  * smoothstep(0.5, 1.0, dot(toOccluder, s.nView) / (r.thickness + length(toOccluder) * 0.08) - 1.0);
-    h *= max(smoothstep(facetTolerance, facetTolerance * 2.5, dot(toOccluder, s.nFacet)), lifted);
+    h *= max(smoothstep(facetTolerance, facetTolerance * MCR_FACET_RAMP, dot(toOccluder, s.nView)), lifted);
     // Smooth tangent plane: the occluder must also rise above it by more than the polygon / curvature error.
     [branch]
     if(s.smoothing <= 0.0 || h <= 0.0) return h;
