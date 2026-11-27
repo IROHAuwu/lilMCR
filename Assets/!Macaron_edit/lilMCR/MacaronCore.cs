@@ -1282,10 +1282,13 @@ namespace liltoon_MCR
             return list.Count;
         }
 
+        // Highest value of _MCR_OccMethod (0 SSAO, 1 Ray March, 2 GTAO, 3 Soft SSAO).
+        public const int MaxOccMethod = 3;
+
         public static void ClearOccMethodStore(Material m)
         {
             if(m == null) return;
-            for(int method = 0; method <= 2; method++) m.SetOverrideTag(OccStoreTagName(method), "");
+            for(int method = 0; method <= MaxOccMethod; method++) m.SetOverrideTag(OccStoreTagName(method), "");
         }
 
         // Float / Range / Color / Vector properties only: name=x,y,z,w;...
