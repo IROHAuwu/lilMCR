@@ -174,7 +174,7 @@ namespace liltoon_MCR
                 if(tier >= 0)
                 {
                     int n = MacaronCore.ApplyTier(ActiveTargets(), tier);
-                    if(source == Source.Avatar) MacaronCore.ApplyTierToAvatar(avatar, tier);
+                    if(source == Source.Avatar) MacaronCore.ApplyTierToAvatar(avatar, tier, excluded);
                     AssetDatabase.SaveAssets();
                     LoadFromFirstTarget();
                     status = ML.F("「{0}」已套用到 {1} 個材質。（可用 Ctrl+Z 復原）", ML.T(MacaronCore.TierLabels[tier]), n);
@@ -564,14 +564,16 @@ namespace liltoon_MCR
 
             // Unity merges the records of one drag (slider, color picker, direction pad) into one Undo step.
             Undo.RecordObjects(mats.ToArray(), "Macaron Batch Settings");
+            bool isSwitch = MacaronCore.IsSwitchPopup(prop.Name);
+            float switchValue = isSwitch ? work.GetFloat(prop.Name) : 0f;
             foreach(Material m in mats)
             {
-                // Method change: each material keeps its own per-method shared settings.
-                if(!MacaronCore.SwitchPopup(m, prop.Name, work.GetFloat(prop.Name))) MacaronCore.CopyProperty(work, m, prop.Name);
+                // Method / Part Detail kind change: each material updates its related settings.
+                if(!isSwitch || !MacaronCore.SwitchPopup(m, prop.Name, switchValue)) MacaronCore.CopyProperty(work, m, prop.Name);
                 EditorUtility.SetDirty(m);
             }
-            // A method change also restores that method's own shared settings: show them.
-            if(prop.Name == MacaronCore.PropOccMethod) LoadFromFirstTarget();
+            // A method or Part Detail kind change also updates related settings: show them.
+            if(isSwitch) LoadFromFirstTarget();
             mixedCache.Clear();
 
             // Uzumore turned on for materials that were never set up (converted before this feature): their per-avatar
@@ -579,11 +581,12 @@ namespace liltoon_MCR
             if(prop.Name == "_MCR_UzuEnable" && work.GetFloat(prop.Name) > 0.5f && source == Source.Avatar && avatar != null
                 && !MacaronUzumore.IsSetUp(mats))
             {
-                Debug.Log("[Macaron] " + avatar.name + "\n" + MacaronUzumore.Setup(avatar));
+                Debug.Log("[Macaron] " + avatar.name + "\n" + MacaronUzumore.Setup(avatar, excluded));
+                LoadFromFirstTarget();
             }
 
-            // Skin turned on: materials with an empty detail texture slot get the one shipped with lilMCR.
-            if(prop.Name == "_MCR_SkinEnable" && work.GetFloat(prop.Name) > 0.5f)
+            // Part Detail turned on or its detail texture changed: fill the bundled texture or auto-detect a normal map.
+            if((prop.Name == "_MCR_SkinEnable" && work.GetFloat(prop.Name) > 0.5f) || prop.Name == "_MCR_SkinTex")
             {
                 foreach(Material m in mats) { if(MacaronCore.EnsureSkinTexture(m)) EditorUtility.SetDirty(m); }
                 LoadFromFirstTarget();

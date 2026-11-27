@@ -126,9 +126,16 @@ namespace liltoon_MCR
                 }
                 else
                     AnimationUtility.SetEditorCurve(clip, EditorCurveBinding.FloatCurve(rootPath,typeof(VRCRotationConstraint),"FreezeToWorld"), AnimationCurve.Linear(0,0,1,1));
-                AssetDatabase.AddObjectToAsset(clip,controller);
-                state.motion=clip; state.writeDefaultValues=false; state.timeParameter=key; state.timeParameterActive=true;
-                if(i == 4) ConfigureBoolStates(controller, layers[layers.Length-1].stateMachine, state, clip, key, value > 0.5f);
+                if(i == 4)
+                {
+                    ConfigureBoolStates(controller, layers[layers.Length-1].stateMachine, state, clip, key, value > 0.5f);
+                    UnityEngine.Object.DestroyImmediate(clip);
+                }
+                else
+                {
+                    AssetDatabase.AddObjectToAsset(clip,controller);
+                    state.motion=clip; state.writeDefaultValues=false; state.timeParameter=key; state.timeParameterActive=true;
+                }
                 object setting=Activator.CreateInstance(config);
                 SetField(setting,"nameOrPrefix",key,true); SetEnumField(setting,"syncType",i == 4 ? "Bool" : "Float",true);
                 SetField(setting,"defaultValue",value,true); SetField(setting,"hasExplicitDefaultValue",true,false); SetField(setting,"saved",true,false); list.Add(setting);
@@ -863,18 +870,25 @@ namespace liltoon_MCR
                 AnimationClipSettings settings = AnimationUtility.GetAnimationClipSettings(clip);
                 settings.loopTime = false;
                 AnimationUtility.SetAnimationClipSettings(clip, settings);
-                AssetDatabase.AddObjectToAsset(clip, controller);
 
                 AnimatorControllerLayer[] ls = controller.layers;
                 ls[i].defaultWeight = 1f;
                 AnimatorStateMachine sm = ls[i].stateMachine;
                 AnimatorState state = sm.AddState(c.Parameter.Replace("Macaron/", ""));
-                state.motion = clip;
-                state.timeParameterActive = true;
-                state.timeParameter = c.Parameter;
-                state.writeDefaultValues = false;   // MA "Match Avatar Write Defaults" adjusts this at build
-                sm.defaultState = state;
-                if(c.Toggle) ConfigureBoolStates(controller, sm, state, clip, c.Parameter, c.Default > 0.5f);
+                if(c.Toggle)
+                {
+                    ConfigureBoolStates(controller, sm, state, clip, c.Parameter, c.Default > 0.5f);
+                    UnityEngine.Object.DestroyImmediate(clip);
+                }
+                else
+                {
+                    AssetDatabase.AddObjectToAsset(clip, controller);
+                    state.motion = clip;
+                    state.timeParameterActive = true;
+                    state.timeParameter = c.Parameter;
+                    state.writeDefaultValues = false;   // MA "Match Avatar Write Defaults" adjusts this at build
+                    sm.defaultState = state;
+                }
                 controller.layers = ls;
             }
 

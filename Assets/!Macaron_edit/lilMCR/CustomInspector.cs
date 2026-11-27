@@ -46,8 +46,11 @@ namespace lilToon
         {
             activeMaterial = material;
             // Derived state (capture key -> capture pass), also fixes materials made before this setting existed.
-            if(MacaronCore.SyncCapturePass(material)) EditorUtility.SetDirty(material);
-            if(MacaronCore.EnsureSkinTexture(material)) EditorUtility.SetDirty(material);
+            foreach(Material m in Targets())
+            {
+                if(MacaronCore.SyncCapturePass(m)) EditorUtility.SetDirty(m);
+                if(MacaronCore.EnsureSkinTexture(m)) EditorUtility.SetDirty(m);
+            }
 
             if(!SectionFoldout("main", "Macaron", true, true)) return;
 
@@ -299,6 +302,8 @@ namespace lilToon
             {
                 if(section.EnableProp != null) MacaronCore.ResetPropertyToDefault(m, section.EnableProp);
                 foreach(MacaronProp prop in section.Props) MacaronCore.ResetPropertyToDefault(m, prop.Name);
+                if(section.Id == "occ") MacaronCore.ClearOccMethodStore(m);
+                else if(section.Id == "uzu") m.SetOverrideTag(MacaronUzumore.SetupTag, "");
             });
         }
 

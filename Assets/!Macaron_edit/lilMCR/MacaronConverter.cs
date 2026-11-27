@@ -703,8 +703,10 @@ namespace liltoon_MCR
             }
 
             WarnSharedAxis(result, log);
-            // Per-avatar part of the tier (lilMCR PCSS light resolution, when that add-on and its light exist).
-            MacaronCore.ApplyTierToAvatar(avatar, tier, leftAlone);
+            // Per-avatar part of the tier: Uzumore per-avatar values (Reach / Layer Offset) and lilMCR PCSS light
+            // resolution (when that add-on and its light exist).
+            string uzumoreMessage;
+            MacaronCore.ApplyTierToAvatar(avatar, tier, leftAlone, out uzumoreMessage);
 
             // Light Adjuster: after the new materials are assigned (it targets renderers with Macaron materials).
             string adjusterMessage = null;
@@ -715,10 +717,7 @@ namespace liltoon_MCR
                 log.AppendLine(adjusterMessage);
             }
 
-            // Uzumore per-avatar values (the IsLocal layer is part of the Light Adjuster above): after the new materials are assigned (it works on the avatar's
-            // Macaron materials). The on / off switch comes from the tier.
-            string uzumoreMessage = MacaronUzumore.Setup(avatar, leftAlone);
-            log.AppendLine(uzumoreMessage);
+            if(!string.IsNullOrEmpty(uzumoreMessage)) log.AppendLine(uzumoreMessage);
 
             Undo.CollapseUndoOperations(undoGroup);
             AssetDatabase.SaveAssets();

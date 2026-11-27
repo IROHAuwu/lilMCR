@@ -97,9 +97,25 @@ namespace liltoon_MCR
                         }
                         bool inPlace = copy != null;
                         if(inPlace) Undo.RecordObject(copy, "Macaron World Shadow Receiver");
-                        else copy = new Material(source) { name = CopyName(source.name) };
+                        else
+                        {
+                            bool orphan = source.isVariant && source.parent == null;
+                            if(!orphan)
+                            {
+                                copy = new Material(source) { name = CopyName(source.name) };
+                                if(copy.isVariant) copy.parent = null;
+                            }
+                            if((copy == null || copy.isVariant) && source.shader != null)
+                            {
+                                if(copy != null) UnityEngine.Object.DestroyImmediate(copy);
+                                copy = new Material(source.shader) { name = CopyName(source.name) };
+                                copy.CopyPropertiesFromMaterial(source);
+                            }
+                            if(copy == null) continue;
+                        }
                         if(refresh)
                         {
+                            if(copy.isVariant) copy.parent = null;
                             if(copy.shader != source.shader) copy.shader = source.shader;
                             copy.CopyPropertiesFromMaterial(source);
                         }

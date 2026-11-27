@@ -41,13 +41,15 @@ namespace LilMCR.MaskGenerator
         Vector2 lastPaint;
         bool hasLastPaint;
         static readonly int[] Sizes = { 512, 1024, 2048, 4096 };
-        static readonly string[] Targets = { "全域遮罩（含 PCSS）", "AO 遮罩", "Contact Shadow 遮罩", "不產生陰影遮罩", "埋入遮罩", "PCSS 遮罩" };
-        static readonly string[] Properties = { "_MCR_GlobalMask", "_MCR_OccMask", "_MCR_ShadowMask", "_MCR_CasterMask", "_MCR_UzuMask", "_lilMCRPCSS_Mask" };
-        static readonly string[] FileSuffixes = { "_MCR_Mask", "_MCR_OccMask", "_MCR_ShadowMask", "_MCR_CasterMask", "_MCR_UzuMask", "_PCSS_Mask" };
+        static readonly string[] Targets = { "全域遮罩（含 PCSS）", "AO 遮罩", "Contact Shadow 遮罩", "不產生陰影遮罩", "埋入遮罩", "PCSS 遮罩", "部位細節遮罩" };
+        static readonly string[] Properties = { "_MCR_GlobalMask", "_MCR_OccMask", "_MCR_ShadowMask", "_MCR_CasterMask", "_MCR_UzuMask", "_lilMCRPCSS_Mask", "_MCR_SkinMask" };
+        static readonly string[] FileSuffixes = { "_MCR_Mask", "_MCR_OccMask", "_MCR_ShadowMask", "_MCR_CasterMask", "_MCR_UzuMask", "_PCSS_Mask", "_MCR_SkinMask" };
         // Index of the Uzumore target (white = pushed back, black = excluded).
         const int UzumoreTarget = 4;
         // Index of the lilMCR PCSS target (PCSS-only mask; lilMCR PCSS materials only).
         const int PcssTarget = 5;
+        // Index of the Part Detail target (white = detail applied, black = excluded).
+        const int SkinTarget = 6;
 
         [MenuItem("Macaron/Mask Generator マスク生成", false, 60)]
         static void Open() { GetWindow<UvMaskWindow>(MaskText.T("UV 遮罩生成器")).minSize = new Vector2(600, 650); }
@@ -96,6 +98,7 @@ namespace LilMCR.MaskGenerator
             EditorGUILayout.LabelField(target == 3 ? MaskText.T("選中的 UV 面 → 黑色 → 不產生陰影")
                 : target == UzumoreTarget ? MaskText.T("選中的 UV 面 → 黑色 → 排除埋入（不推回）")
                 : target == PcssTarget ? MaskText.T("選中的 UV 面 → 黑色 → 沒有 PCSS 影子")
+                : target == SkinTarget ? MaskText.T("選中的 UV 面 → 黑色 → 排除部位細節")
                 : MaskText.T("選中的 UV 面 → 黑色遮罩 → 不受效果影響"), EditorStyles.boldLabel);
             EditorGUI.BeginChangeCheck();
             source = (Renderer)EditorGUILayout.ObjectField(MaskText.T("模型 Renderer"), source, typeof(Renderer), true);
@@ -149,6 +152,8 @@ namespace LilMCR.MaskGenerator
                     ? MaskText.T("白色 = 正常產生陰影／黑色 = 不產生陰影。選中的面輸出為黑色，其餘為白色。")
                 : target == PcssTarget
                     ? MaskText.T("白色 = 有 PCSS 影子／黑色 = 沒有 PCSS 影子（只影響 PCSS，不影響 AO 與 Contact Shadow）。選中的面輸出為黑色，其餘為白色。")
+                : target == SkinTarget
+                    ? MaskText.T("白色 = 有部位細節效果／黑色 = 排除（不套用細紋與高光）。選中的面輸出為黑色，其餘為白色。")
                     : MaskText.T("白色 = 有效果／黑色 = 排除效果。選中的面輸出為黑色，其餘為白色。"), EditorStyles.wordWrappedMiniLabel);
             using(new EditorGUI.DisabledScope(selected == null || material == null || !material.HasProperty(Properties[target])))
                 if(GUILayout.Button(MaskText.T("生成 PNG 並自動套用…"), GUILayout.Height(28))) Export();

@@ -23,7 +23,7 @@ lilMCR（Macaron）是 [lilToon](https://github.com/lilxyzw/lilToon) 2.x 的自�
 |---|---|
 | **接觸陰影** Contact Shadow | 依光源方向在角色身上產生貼近的陰影，可用遮罩控制範圍 |
 | **遮蔽** Occlusion | 讓凹陷與貼合處變暗，增加立體感。有四種方式可選（SSAO、柔和 SSAO、GTAO、Ray March），可用遮罩控制範圍 |
-| **部位細節** Part Detail | 在材質上加上細紋與柔和高光：皮膚（細紋與毛孔）或布料纖維（織紋）。由 lilMCR 自己繪製，不會更動材質原本的 lilToon 設定 |
+| **部位細節** Part Detail | 在材質上加上細紋與柔和高光：皮膚（細紋與毛孔）、布料纖維（織紋）或自備法線貼圖。由 lilMCR 自己繪製，不會更動材質原本的 lilToon 設定 |
 | **埋入** Uzumore | 鏡頭進入網格內部時，把頂點推回鏡頭前方，避免穿模看穿 |
 | **僅自己可見** Local Only | lilMCR 的效果只在自己的畫面顯示，其他玩家看到的是一般 lilToon |
 | **自適應畫質** | 依畫面佔比自動調整陰影與遮蔽的品質 |

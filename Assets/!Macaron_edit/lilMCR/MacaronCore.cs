@@ -671,6 +671,12 @@ namespace liltoon_MCR
             if(tex != null) m.SetTexture("_MCR_SkinTex", tex);
         }
 
+        /// <summary>True when changing this popup does more than set its float value (SwitchPopup).</summary>
+        public static bool IsSwitchPopup(string name)
+        {
+            return name == PropOccMethod || name == PropSkinKind;
+        }
+
         /// <summary>Popups whose change does more than set the value. Returns false for an ordinary popup.</summary>
         public static bool SwitchPopup(Material m, string name, float value)
         {
@@ -1261,9 +1267,16 @@ namespace liltoon_MCR
         /// <summary>ApplyTierToAvatar that leaves the given materials alone (the Converter's excluded materials).</summary>
         public static void ApplyTierToAvatar(GameObject avatar, int tier, ICollection<Material> exclude)
         {
+            string unused;
+            ApplyTierToAvatar(avatar, tier, exclude, out unused);
+        }
+
+        internal static void ApplyTierToAvatar(GameObject avatar, int tier, ICollection<Material> exclude, out string uzumoreMessage)
+        {
+            uzumoreMessage = "";
             if(avatar == null) return;
             // The tier reset Uzumore's Reach / Layer Offset: set them for this avatar again.
-            MacaronUzumore.Setup(avatar, exclude);
+            uzumoreMessage = MacaronUzumore.Setup(avatar, exclude);
             if(TierAppliedToAvatar != null) TierAppliedToAvatar(avatar, tier);
         }
 
@@ -1453,7 +1466,7 @@ namespace liltoon_MCR
                 int i = s.FindPropertyIndex(PropShadowSpace);
                 if(i >= 0) return Mathf.Clamp(Mathf.RoundToInt(s.GetPropertyDefaultFloatValue(i)), 0, 2);
             }
-            return 1;
+            return 0;
         }
 
         //------------------------------------------------------------------------------------------

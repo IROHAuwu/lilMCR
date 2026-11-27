@@ -205,7 +205,7 @@ namespace lilMCR.PCSS
                 if(tier >= 0)
                 {
                     MacaronCore.ApplyTier(targets, tier);
-                    MacaronCore.ApplyTierToAvatar(avatar, tier);     // shadow map resolution of the light
+                    MacaronCore.ApplyTierToAvatar(avatar, tier, excluded);     // shadow map resolution of the light
                     AssetDatabase.SaveAssets();
                 }
             }

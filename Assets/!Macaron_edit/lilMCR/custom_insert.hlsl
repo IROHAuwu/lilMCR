@@ -798,6 +798,7 @@ void MCR_OccBudget(float viewDepth, float reachPx, int qualityDrop, out int rays
 // Quality level 0..3 as on desktop: without the VR drop. qualityDrop as in MCR_OccBudget.
 int MCR_OccLevelNoVR(float viewDepth, int qualityDrop)
 {
+    if(MCR_MirrorLowest()) return 0;
     int q = MCR_OccQualitySetting();
     q = q == 4 ? 1 : q;
     return max(0, q - MCR_DistanceLOD(viewDepth) - qualityDrop);
@@ -2006,10 +2007,18 @@ void Macaron_SkinBegin(inout lilFragData fd)
     if(!(_MCR_SkinEnable > 0.5 && _MCR_Active > 0.5 && MCR_MenuActive() && Macaron_LocalVisible())) return;
     if(Macaron_IsWorldCapture()) return;
 
+    // Kind 2 ("Your Own Normal Map") with an empty slot falls back to Unity's 4x4 "gray" texture (R * A = 0.25,
+    // which would tilt the whole surface normal sideways). Treat a <= 4 px texture as flat and skip the detail reads.
+    float2 skinTexSize = lilGetWidthAndHeight(_MCR_SkinTex);
+    bool emptyNormalMap = _MCR_SkinKind > 1.5 && min(skinTexSize.x, skinTexSize.y) <= 4.0;
     float tiling = max(_MCR_SkinTiling, 1.0);
     float2 uvFine = fd.uvMain * tiling;
     float2 uvWide = float2(uvFine.x * MCR_SKIN_WIDE_COS - uvFine.y * MCR_SKIN_WIDE_SIN, uvFine.x * MCR_SKIN_WIDE_SIN + uvFine.y * MCR_SKIN_WIDE_COS) * MCR_SKIN_WIDE_SCALE + 0.37;
-    float4 wide = Macaron_SkinTexel(LIL_SAMPLE_2D(_MCR_SkinTex, lil_sampler_linear_repeat, uvWide));
+    float4 wide = float4(0.5, 0.5, 0.0, 0.5);
+    if(!emptyNormalMap)
+    {
+        wide = Macaron_SkinTexel(LIL_SAMPLE_2D(_MCR_SkinTex, lil_sampler_linear_repeat, uvWide));
+    }
     float mask = 1.0;
     if(_MCR_SkinMaskAmount > 0.0)
     {
@@ -2035,39 +2044,42 @@ void Macaron_SkinBegin(inout lilFragData fd)
     B *= frameScale;
 
     // Fine read (explicit gradients, so it can sit inside a branch): x, y = slope, z = cavity.
-    float3 fine;
+    float3 fine = 0.0;
     [branch]
-    if(_MCR_SkinEven > 0.5)
+    if(!emptyNormalMap)
     {
-        // Even Density: the main UV is stretched differently from place to place (and by blend shapes), which would
-        // stretch the skin lines with it. How many meters one UV unit covers along U and along V is known from the
-        // derivatives, so each axis gets the tiling that draws one tile per Size meters there. Tilings are powers of
-        // two (the texture stays seamless); the two nearest ones are blended on each axis, 4 reads in all.
-        float det = dux.x * duy.y - dux.y * duy.x;
-        float invDet = 1.0 / (abs(det) > 1e-20 ? det : 1e-20);
-        float3 Pu = (dpx * duy.y - dpy * dux.y) * invDet;
-        float3 Pv = (dpy * dux.x - dpx * duy.x) * invDet;
-        float2 level = clamp(log2(max(float2(length(Pu), length(Pv)) / max(_MCR_SkinSize, 0.001), 1e-6)), -2.0, 12.0);
-        float2 lower = floor(level);
-        float2 f = level - lower;
-        float2 scaleLow = exp2(lower);
-        // A tiling coarser than wanted draws the detail larger, so its slopes are shallower by the same factor
-        // (and steeper for the finer one).
-        float2 slopeLow = exp2(-f);
-        fine = 0.0;
-        for(int i = 0; i < 4; i++)
+        [branch]
+        if(_MCR_SkinEven > 0.5)
         {
-            float2 pick = float2(i & 1, i >> 1);
-            float2 scale = scaleLow * (1.0 + pick);
-            float2 wgt2 = lerp(1.0 - f, f, pick);
-            float4 t = Macaron_SkinTexel(LIL_SAMPLE_2D_GRAD(_MCR_SkinTex, lil_sampler_linear_repeat, fd.uvMain * scale, dux * scale, duy * scale));
-            fine += float3((t.xy * 2.0 - 1.0) * slopeLow * (1.0 + pick), t.b) * (wgt2.x * wgt2.y);
+            // Even Density: the main UV is stretched differently from place to place (and by blend shapes), which would
+            // stretch the skin lines with it. How many meters one UV unit covers along U and along V is known from the
+            // derivatives, so each axis gets the tiling that draws one tile per Size meters there. Tilings are powers of
+            // two (the texture stays seamless); the two nearest ones are blended on each axis, 4 reads in all.
+            float det = dux.x * duy.y - dux.y * duy.x;
+            float invDet = 1.0 / (abs(det) > 1e-20 ? det : 1e-20);
+            float3 Pu = (dpx * duy.y - dpy * dux.y) * invDet;
+            float3 Pv = (dpy * dux.x - dpx * duy.x) * invDet;
+            float2 level = clamp(log2(max(float2(length(Pu), length(Pv)) / max(_MCR_SkinSize, 0.001), 1e-6)), -2.0, 12.0);
+            float2 lower = floor(level);
+            float2 f = level - lower;
+            float2 scaleLow = exp2(lower);
+            // A tiling coarser than wanted draws the detail larger, so its slopes are shallower by the same factor
+            // (and steeper for the finer one).
+            float2 slopeLow = exp2(-f);
+            for(int i = 0; i < 4; i++)
+            {
+                float2 pick = float2(i & 1, i >> 1);
+                float2 scale = scaleLow * (1.0 + pick);
+                float2 wgt2 = lerp(1.0 - f, f, pick);
+                float4 t = Macaron_SkinTexel(LIL_SAMPLE_2D_GRAD(_MCR_SkinTex, lil_sampler_linear_repeat, fd.uvMain * scale, dux * scale, duy * scale));
+                fine += float3((t.xy * 2.0 - 1.0) * slopeLow * (1.0 + pick), t.b) * (wgt2.x * wgt2.y);
+            }
         }
-    }
-    else
-    {
-        float4 t = Macaron_SkinTexel(LIL_SAMPLE_2D_GRAD(_MCR_SkinTex, lil_sampler_linear_repeat, uvFine, dux * tiling, duy * tiling));
-        fine = float3(t.xy * 2.0 - 1.0, t.b);
+        else
+        {
+            float4 t = Macaron_SkinTexel(LIL_SAMPLE_2D_GRAD(_MCR_SkinTex, lil_sampler_linear_repeat, uvFine, dux * tiling, duy * tiling));
+            fine = float3(t.xy * 2.0 - 1.0, t.b);
+        }
     }
 
     #if defined(LIL_RENDER) && LIL_RENDER == 2
@@ -2151,7 +2163,8 @@ void Macaron_SkinEnd(inout lilFragData fd)
     float cavity = mcrSkinCavity;
     float3 L = fd.L;
     float3 light = fd.lightColor;
-    float3 H = normalize(L + V);
+    float3 hv = L + V;
+    float3 H = hv * rsqrt(max(dot(hv, hv), MCR_EPS));
     float nh = saturate(dot(Nd, H));
     float lh = saturate(dot(L, H));
     float nlD = saturate(dot(Nd, L));

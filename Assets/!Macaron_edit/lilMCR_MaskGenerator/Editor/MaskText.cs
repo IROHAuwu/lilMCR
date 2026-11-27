@@ -95,6 +95,9 @@ namespace LilMCR.MaskGenerator
             { "白色 = 有埋入效果（鏡頭穿入時推回）／黑色 = 排除（不推回，例如脖子、背後）。選中的面輸出為黑色，其餘為白色。", new[] { "White = Uzumore on (pushed back when a camera goes inside) / Black = excluded (not pushed back, e.g. neck, back). Selected faces are exported black, the rest white.", "白 = 埋もれ効果あり（カメラがめり込んだとき押し戻す）／黒 = 対象外（押し戻さない。例：首、背中）。選択した面は黒、それ以外は白で出力します。", "흰색 = 파묻힘 적용 (카메라가 들어오면 밀어냄) / 검은색 = 제외 (밀어내지 않음, 예: 목, 등). 선택한 면은 검은색, 나머지는 흰색으로 출력합니다." } },
             { "白色 = 正常產生陰影／黑色 = 不產生陰影。選中的面輸出為黑色，其餘為白色。", new[] { "White = casts shadows / Black = no shadow casting. Selected faces are exported black, the rest white.", "白 = 通常どおり影を生成／黒 = 影を生成しない。選択した面は黒、それ以外は白で出力します。", "흰색 = 그림자를 드리움 / 검은색 = 그림자를 드리우지 않음. 선택한 면은 검은색, 나머지는 흰색으로 출력합니다." } },
             { "白色 = 有效果／黑色 = 排除效果。選中的面輸出為黑色，其餘為白色。", new[] { "White = effect on / Black = effect excluded. Selected faces are exported black, the rest white.", "白 = 効果あり／黒 = 効果の対象外。選択した面は黒、それ以外は白で出力します。", "흰색 = 효과 적용 / 검은색 = 효과 제외. 선택한 면은 검은색, 나머지는 흰색으로 출력합니다." } },
+            { "部位細節遮罩", new[] { "Part Detail mask", "部位ディテールマスク", "부위 디테일 마스크" } },
+            { "選中的 UV 面 → 黑色 → 排除部位細節", new[] { "Selected UV faces → black → excluded from Part Detail", "選択した UV 面 → 黒 → 部位ディテールの対象外", "선택한 UV 면 → 검은색 → 부위 디테일 제외" } },
+            { "白色 = 有部位細節效果／黑色 = 排除（不套用細紋與高光）。選中的面輸出為黑色，其餘為白色。", new[] { "White = Part Detail on / Black = excluded (no detail or highlight). Selected faces are exported black, the rest white.", "白 = 部位ディテール効果あり／黒 = 対象外（凹凸とハイライトを適用しない）。選択した面は黒、それ以外は白で出力します。", "흰색 = 부위 디테일 적용 / 검은색 = 제외 (요철과 하이라이트 미적용). 선택한 면은 검은색, 나머지는 흰색으로 출력됩니다." } },
         };
     }
 }

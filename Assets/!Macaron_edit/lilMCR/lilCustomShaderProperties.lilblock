@@ -90,7 +90,7 @@
         [NoScaleOffset] _MCR_SkinTex ("Skin Detail (RG normal, B cavity, A color variation)", 2D) = "gray" {}
         _MCR_SkinTiling ("Skin Detail Tiling", Range(1, 80)) = 30
         [ToggleUI] _MCR_SkinEven ("Skin Even Density", Float) = 1
-        _MCR_SkinKind ("Skin Detail Kind (0 skin, 1 cloth fiber; inspector preset only)", Float) = 0
+        _MCR_SkinKind ("Skin Detail Kind (0 skin, 1 cloth fiber, 2 normal map)", Float) = 0
         _MCR_SkinWide ("Skin Large Detail", Range(0, 1)) = 0
         _MCR_SkinSize ("Skin Detail Size (m)", Range(0.005, 0.2)) = 0.04
         _MCR_SkinDetail ("Skin Detail Strength", Range(0, 2)) = 1
